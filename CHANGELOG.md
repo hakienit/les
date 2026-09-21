@@ -1,7 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 - 2026-09-21
 
+- Keep repo-local `.les-agents/` Markdown-only and gitignored; run the CLI from
+  the pinned package instead of copying LES source code into the repository.
 - Add repo-local `.les-agents` installation with `on`/`off` routing controls.
 - Keep provider pointers collision-safe and independent from global agent directories.
 

@@ -19,11 +19,12 @@ add optional domain rules, and adapters route hosts to the same bootstrap.
 
 LES has two layers:
 
-1. `.les-agents/` contains the pinned LES payload: policies, skills, profiles,
-   adapters, templates, and its manifest.
+1. `.les-agents/` contains the pinned Markdown-only LES payload: policies,
+   skills, profiles, adapters, and its manifest.
 2. A provider pointer tells one AI CLI to read the adapter from `.les-agents/`.
 
-The installer is repo-local. It does not write to `~/.agents`, `~/.codex`,
+The payload is repo-local and automatically added to `.gitignore`. The installer
+does not write to `~/.agents`, `~/.codex`,
 `~/.claude`, `~/.gemini`, or any other global agent directory.
 
 ### Install
@@ -31,40 +32,35 @@ The installer is repo-local. It does not write to `~/.agents`, `~/.codex`,
 Run this from the project root:
 
 ~~~sh
-npx -y github:hakienit/les
+npx -y github:hakienit/les#v1.0.0
 ~~~
 
-The short command is equivalent to `les add --scope repo --root .les-agents`.
-It creates:
+The command is equivalent to `npx -y github:hakienit/les#v1.0.0 add --scope repo
+--root .les-agents`. It creates:
 
 ~~~text
 .les-agents/
 ├── adapters/
-├── bin/
 ├── policies/
 ├── profiles/
 ├── skills/
-├── templates/
-├── tools/
-├── package.json
-├── les-manifest.json
-└── les-manifest.yaml
+└── les-manifest.md
 ~~~
 
-The bundled launcher is repo-local. Add it to the current shell once:
+Every file under `.les-agents/` is Markdown. The CLI implementation, release
+tools, JSON/YAML metadata, and package files stay in the package runner and are
+not copied into the repository payload.
+
+The installer also adds this rule to the project `.gitignore`:
 
 ~~~sh
-export PATH="$PWD/.les-agents/bin:$PATH"
+.les-agents/
 ~~~
 
-After that, use the short `les` command. This changes only the current shell's
-PATH; it does not install a global command or modify global agent directories.
-
-Initialize the repo-local activation helper:
+Run later commands through the same pinned package version:
 
 ~~~sh
-les init
-source .les-agents/activate.sh
+npx -y github:hakienit/les#v1.0.0 doctor
 ~~~
 
 The install is collision-safe. An existing `.les-agents/` or project-owned
@@ -73,13 +69,13 @@ manifest stops the command instead of overwriting files.
 To preview the install:
 
 ~~~sh
-npx -y github:hakienit/les add --scope repo --root .les-agents --dry-run
+npx -y github:hakienit/les#v1.0.0 add --scope repo --root .les-agents --dry-run
 ~~~
 
 To pin an exact Git tag:
 
 ~~~sh
-npx -y github:hakienit/les#v0.1.0
+npx -y github:hakienit/les#v1.0.0
 ~~~
 
 ### Enable routing
@@ -87,14 +83,15 @@ npx -y github:hakienit/les#v0.1.0
 Register and enable only the CLI you want:
 
 ~~~sh
-les active codex
-les active claude-code
-les active gemini-cli
-les active antigravity
+npx -y github:hakienit/les#v1.0.0 active codex
+npx -y github:hakienit/les#v1.0.0 active claude-code
+npx -y github:hakienit/les#v1.0.0 active gemini-cli
+npx -y github:hakienit/les#v1.0.0 active antigravity
 ~~~
 
 `active` writes only the selected repo-local provider pointer. It does not
-modify global agent directories.
+modify global agent directories. The pointer tells the provider to prefer the
+local `.les-agents` adapter, policy, and skill payload over global LES copies.
 
 The repo-local pointer locations are:
 
@@ -114,20 +111,20 @@ If a pointer already exists, review the suggested pointer and add it manually.
 Disable one provider:
 
 ~~~sh
-les off codex
+npx -y github:hakienit/les#v1.0.0 off codex
 ~~~
 
 Disable all providers currently enabled:
 
 ~~~sh
-les off
+npx -y github:hakienit/les#v1.0.0 off
 ~~~
 
 `off` removes only an unchanged pointer created by LES. It leaves
 `.les-agents/` installed, so routing can be restored later:
 
 ~~~sh
-les on
+npx -y github:hakienit/les#v1.0.0 on
 ~~~
 
 The no-provider form toggles all providers previously configured with `on
@@ -137,23 +134,23 @@ The no-provider form toggles all providers previously configured with `on
 
 ~~~sh
 # Show managed differences
-les diff
+npx -y github:hakienit/les#v1.0.0 diff
 
 # Check installation and provider status
-les doctor
+npx -y github:hakienit/les#v1.0.0 doctor
 
 # Update the payload; project-owned files are preserved
-npx -y github:hakienit/les update
+npx -y github:hakienit/les#v1.0.0 update
 
 # Preview an update
-npx -y github:hakienit/les update --dry-run
+npx -y github:hakienit/les#v1.0.0 update --dry-run
 ~~~
 
 `update` creates a sibling backup and refuses to proceed when unmanaged files
 are present inside `.les-agents/`. Restore a backup with:
 
 ~~~sh
-les rollback --backup <backup-path>
+npx -y github:hakienit/les#v1.0.0 rollback --backup <backup-path>
 ~~~
 
 The older `adapter <provider>` command remains an alias for `active <provider>`.
@@ -164,22 +161,20 @@ LES does not currently provide an `uninstall` command. Remove it safely from a
 repo with:
 
 ~~~sh
-les off
+npx -y github:hakienit/les#v1.0.0 off
 rm -rf .les-agents
 ~~~
 
-`les off` removes only unchanged provider pointers created by LES. If a pointer
-was edited or belongs to the project, LES stops instead of deleting it. The
-PATH export is shell-local; remove the same export line from your shell profile
-if you added it there permanently.
+`off` removes only unchanged provider pointers created by LES. If a pointer was
+edited or belongs to the project, LES stops instead of deleting it.
 
 ### Custom repo-local root
 
 `.les-agents` is the default. A different relative directory can be selected:
 
 ~~~sh
-npx -y github:hakienit/les add --root .team-les
-npx -y github:hakienit/les on codex --root .team-les
+npx -y github:hakienit/les#v1.0.0 add --root .team-les
+npx -y github:hakienit/les#v1.0.0 on codex --root .team-les
 ~~~
 
 The root must stay inside the current repository; absolute paths and `..` are

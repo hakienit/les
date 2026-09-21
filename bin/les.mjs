@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { access, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
@@ -9,28 +9,24 @@ import { spawnSync } from "node:child_process";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageMetadata = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
-const payload = [
-  ["bin/les", "bin/les"],
-  ["bin/les.mjs", "bin/les.mjs"],
-  ["package.json", "package.json"],
-  ["policies", "policies"],
-  ["skills", "skills"],
-  ["profiles", "profiles"],
-  ["adapters", "adapters"],
-  ["templates", "templates"],
-  ["tools", "tools"],
-  ["inventory.yaml", "inventory.yaml"],
-  ["README.md", "README.md"],
-  ["CHANGELOG.md", "CHANGELOG.md"],
-  ["LICENSE", "LICENSE"]
-];
+const manifestFilename = "les-manifest.md";
+const legacyManagedFiles = new Set(["les-manifest.json", "les-manifest.yaml", "activate.sh"]);
+
+function isAgentPayloadFile(path) {
+  return path.endsWith(".md") && (
+    path.startsWith("policies/") ||
+    (path.startsWith("skills/") && path.endsWith("/SKILL.md")) ||
+    (path.startsWith("profiles/") && (path.includes("/rules/") || path.includes("/references/"))) ||
+    (path.startsWith("adapters/") && path !== "adapters/README.md")
+  );
+}
 
 function usage() {
   console.log(`LES repo-local CLI
 
 Usage:
   les                         install the default repo payload
-  les init                    initialize the local shell activation helper
+  les init                    verify the local installation and show next steps
   les active <provider>       register and enable a provider
   les on [provider]           enable one or all registered providers
   les off [provider]          disable one or all providers
@@ -43,9 +39,8 @@ Providers: codex, claude-code, gemini-cli, antigravity
 Options: --root PATH, --scope repo|global, --dry-run
 
 Install from GitHub:
-  npx -y github:hakienit/les
-  les init
-  les active codex`);
+  npx -y github:hakienit/les#v${packageMetadata.version}
+  npx -y github:hakienit/les#v${packageMetadata.version} active codex`);
 }
 
 function parseArgs(argv) {
@@ -106,10 +101,6 @@ function targetFor(scope, root = ".les-agents") {
   return resolve(process.cwd(), root);
 }
 
-function repoManifestPath(target) {
-  return join(target, "les-manifest.yaml");
-}
-
 function providerEntryFor(provider, scope) {
   const root = scope === "repo" ? process.cwd() : undefined;
   const home = process.env.HOME || homedir();
@@ -135,13 +126,14 @@ function adapterSourcePath(target, provider) {
 }
 
 function adapterPointer(provider, source) {
+  const priority = "For this repository, .les-agents is the LES source of truth. Prefer this local adapter, policy, and skill payload over global LES copies.\n\n";
   if (provider === "codex") {
-    return "# LES adapter\n\nRead and follow the pinned LES adapter at " + source + " before starting work.\n";
+    return "# LES adapter\n\n" + priority + "Read and follow the pinned LES adapter at " + source + " before starting work.\n";
   }
   if (provider === "antigravity") {
-    return "---\nname: les\ndescription: Route work through the pinned Living Engineering System.\n---\n\nRead and follow the pinned LES adapter at " + source + " before starting work.\n";
+    return "---\nname: les\ndescription: Route work through the pinned Living Engineering System.\n---\n\n" + priority + "Read and follow the pinned LES adapter at " + source + " before starting work.\n";
   }
-  return "# LES adapter\n\n@" + source + "\n";
+  return "# LES adapter\n\n" + priority + "@" + source + "\n";
 }
 
 async function exists(path) {
@@ -171,71 +163,69 @@ async function sha256(path) {
   return createHash("sha256").update(await readFile(path)).digest("hex");
 }
 
-async function sourceFiles() {
+async function sourceFiles(root = packageRoot) {
   const files = new Map();
-  for (const [source, destination] of payload) {
-    const sourcePath = join(packageRoot, source);
-    const sourceInfo = await stat(sourcePath);
-    if (sourceInfo.isDirectory()) {
-      for (const relativePath of await filesBelow(sourcePath)) {
-        files.set(join(destination, relativePath), sourcePath + "/" + relativePath);
+  for (const directory of ["policies", "skills", "profiles", "adapters"]) {
+    const sourcePath = join(root, directory);
+    if (!await exists(sourcePath)) continue;
+    for (const relativePath of await filesBelow(sourcePath)) {
+      const path = join(directory, relativePath).split(sep).join("/");
+      if (isAgentPayloadFile(path)) {
+        files.set(path, join(sourcePath, relativePath));
       }
-    } else {
-      files.set(destination, sourcePath);
     }
   }
   return files;
 }
 
 async function copyPayload(stage) {
-  for (const [source, destination] of payload) {
-    await cp(join(packageRoot, source), join(stage, destination), { recursive: true });
+  for (const [destination, sourcePath] of await sourceFiles(packageRoot)) {
+    const target = join(stage, destination);
+    await mkdir(dirname(target), { recursive: true });
+    await cp(sourcePath, target);
   }
 }
 
-async function createManifest(stage, scope, adapters = [], configuredAdapters = adapters) {
+function manifestSource(manifest) {
+  return "# LES manifest\n\n```json\n" + JSON.stringify(manifest, null, 2) + "\n```\n";
+}
+
+function parseManifest(source) {
+  const json = source.match(/```json\n([\s\S]*?)\n```/u)?.[1] || source;
+  return JSON.parse(json);
+}
+
+async function writeManifest(target, manifest) {
+  await writeFile(join(target, manifestFilename), manifestSource(manifest));
+}
+
+async function createManifest(stage, scope, adapters = [], configuredAdapters = adapters, metadata = packageMetadata) {
   const managed = [];
   for (const relativePath of await filesBelow(stage)) {
     managed.push({ path: relativePath, sha256: await sha256(join(stage, relativePath)) });
   }
   const manifest = {
     manifestVersion: 1,
-    packageName: packageMetadata.name,
-    packageVersion: packageMetadata.version,
+    packageName: metadata.name,
+    packageVersion: metadata.version,
     scope,
     installedAt: new Date().toISOString(),
     managed,
     adapters,
     configuredAdapters: [...configuredAdapters]
   };
-  await writeFile(join(stage, "les-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+  await writeManifest(stage, manifest);
   return manifest;
 }
 
-async function writeRepoManifest(target, manifest) {
-  const path = repoManifestPath(target);
-  await mkdir(target, { recursive: true });
-  await writeFile(path, [
-    "manifestVersion: 1",
-    "lesVersion: " + JSON.stringify(manifest.packageVersion),
-    "managedRoot: " + JSON.stringify(relative(process.cwd(), target).split(sep).join("/")),
-    "profiles: []",
-    "adapters: " + JSON.stringify(manifest.adapters || []),
-    "configuredAdapters: " + JSON.stringify(manifest.configuredAdapters || manifest.adapters || []),
-    ""
-  ].join("\n"));
-}
-
-async function writeActivation(target) {
-  await writeFile(join(target, "activate.sh"), "export PATH=\"$PWD/" + relative(process.cwd(), join(target, "bin")).split(sep).join("/") + ":$PATH\"\n");
-}
-
 async function readManifest(target) {
-  const manifestPath = join(target, "les-manifest.json");
+  const currentPath = join(target, manifestFilename);
+  const legacyPath = join(target, "les-manifest.json");
+  const manifestPath = await exists(currentPath) ? currentPath : legacyPath;
   if (!await exists(manifestPath)) {
     throw new Error("No LES manifest at " + target + ". Run les add first.");
   }
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  const manifest = parseManifest(await readFile(manifestPath, "utf8"));
   if (manifest.packageName !== packageMetadata.name || !Array.isArray(manifest.managed)) {
     throw new Error("The existing manifest is not a compatible LES installation.");
   }
@@ -244,16 +234,15 @@ async function readManifest(target) {
 
 async function unmanagedFiles(target, manifest) {
   const known = new Set(manifest.managed.map((entry) => entry.path));
-  known.add("les-manifest.json");
-  known.add("les-manifest.yaml");
-  known.add("activate.sh");
+  known.add(manifestFilename);
+  for (const path of legacyManagedFiles) known.add(path);
   return (await filesBelow(target)).filter((relativePath) => !known.has(relativePath));
 }
 
 async function changesFor(target) {
   const manifest = await readManifest(target);
   const source = await sourceFiles();
-  const installed = new Set((await filesBelow(target)).filter((path) => !["les-manifest.json", "les-manifest.yaml", "activate.sh"].includes(path)));
+  const installed = new Set((await filesBelow(target)).filter((path) => path !== manifestFilename && !legacyManagedFiles.has(path)));
   const changes = [];
   for (const [relativePath, sourcePath] of source) {
     const installedPath = join(target, relativePath);
@@ -273,11 +262,19 @@ async function changesFor(target) {
   return changes.sort();
 }
 
-async function buildStage(target, scope, adapters, configuredAdapters) {
+async function buildStage(target, scope, adapters, configuredAdapters, sourceRoot = packageRoot, metadata = packageMetadata) {
   await mkdir(dirname(target), { recursive: true });
   const stage = await mkdtemp(join(dirname(target), "." + basename(target) + ".staging-"));
-  await copyPayload(stage);
-  await createManifest(stage, scope, adapters, configuredAdapters);
+  if (sourceRoot === packageRoot) {
+    await copyPayload(stage);
+  } else {
+    for (const [destination, sourcePath] of await sourceFiles(sourceRoot)) {
+      const targetPath = join(stage, destination);
+      await mkdir(dirname(targetPath), { recursive: true });
+      await cp(sourcePath, targetPath);
+    }
+  }
+  await createManifest(stage, scope, adapters, configuredAdapters, metadata);
   return stage;
 }
 
@@ -288,21 +285,35 @@ function backupPath(target) {
 async function install(target, scope, replace, adapters = [], configuredAdapters = adapters) {
   const stage = await buildStage(target, scope, adapters, configuredAdapters);
   let backup;
+  let backupStage;
+  let displaced;
   try {
     if (replace) {
       backup = backupPath(target);
-      await rename(target, backup);
+      const previousManifest = await readManifest(target);
+      backupStage = await buildStage(backup, scope, previousManifest.adapters || [], previousManifest.configuredAdapters || previousManifest.adapters || [], target, {
+        name: previousManifest.packageName,
+        version: previousManifest.packageVersion
+      });
+      await rename(backupStage, backup);
+      backupStage = undefined;
+      displaced = join(dirname(target), "." + basename(target) + ".displaced-" + Date.now());
+      await rename(target, displaced);
     }
     await rename(stage, target);
+    if (displaced) await rm(displaced, { recursive: true, force: true });
     return backup;
   } catch (error) {
-    if (backup && !await exists(target) && await exists(backup)) {
-      await rename(backup, target);
+    if (displaced && !await exists(target) && await exists(displaced)) {
+      await rename(displaced, target);
     }
     throw error;
   } finally {
     if (await exists(stage)) {
       await rm(stage, { recursive: true, force: true });
+    }
+    if (backupStage && await exists(backupStage)) {
+      await rm(backupStage, { recursive: true, force: true });
     }
   }
 }
@@ -314,34 +325,54 @@ function printPlan(action, target, changes = []) {
   }
 }
 
+function repoIgnoreEntry(target) {
+  const path = relative(process.cwd(), target).split(sep).join("/").replace(/\/+$/u, "");
+  return path ? path + "/" : undefined;
+}
+
+async function needsRepoIgnore(target) {
+  const entry = repoIgnoreEntry(target);
+  if (!entry) return false;
+  const path = join(process.cwd(), ".gitignore");
+  const current = await exists(path) ? await readFile(path, "utf8") : "";
+  return !current.split(/\r?\n/u).some((line) => [entry, entry.slice(0, -1)].includes(line.trim()));
+}
+
+async function ensureRepoIgnore(target) {
+  const entry = repoIgnoreEntry(target);
+  if (!entry || !await needsRepoIgnore(target)) return false;
+  const path = join(process.cwd(), ".gitignore");
+  const current = await exists(path) ? await readFile(path, "utf8") : "";
+  const prefix = current && !current.endsWith("\n") ? current + "\n" : current;
+  await writeFile(path, prefix + entry + "\n");
+  return true;
+}
+
 async function add(target, options) {
   if (await exists(target)) {
     throw new Error("Collision at " + target + ". Use les update only for an existing LES installation.");
   }
-  if (options.scope === "repo" && await exists(repoManifestPath(target))) {
-    throw new Error("Collision at " + repoManifestPath(target) + ". Resolve the existing LES metadata before adding a new installation.");
+  const changes = ["write Markdown-only LES files pinned to " + packageMetadata.version];
+  if (options.scope === "repo" && await needsRepoIgnore(target)) {
+    changes.push("add " + repoIgnoreEntry(target) + " to .gitignore");
   }
-  printPlan("add", target, ["write managed LES files pinned to " + packageMetadata.version]);
+  printPlan("add", target, changes);
   if (options.dryRun) {
     return;
   }
+  if (options.scope === "repo") await ensureRepoIgnore(target);
   await install(target, options.scope, false);
-  if (options.scope === "repo") {
-    await writeRepoManifest(target, await readManifest(target));
-  }
   console.log("Installed " + packageMetadata.name + "@" + packageMetadata.version + ".");
-  if (options.scope === "repo") console.log("Next: export PATH=\"$PWD/" + relative(process.cwd(), join(target, "bin")).split(sep).join("/") + ":$PATH\" && les init");
+  if (options.scope === "repo") console.log("Next: npx -y github:hakienit/les#v" + packageMetadata.version + " active <provider>");
 }
 
 async function init(target, options) {
   await readManifest(target);
   if (options.dryRun) {
-    printPlan("init", join(target, "activate.sh"), ["write the repo-local PATH helper"]);
+    printPlan("init", target, ["use the pinned package through npx; no local launcher is copied"]);
     return;
   }
-  await writeActivation(target);
-  console.log("Initialized repo-local LES.");
-  console.log("Run: source " + relative(process.cwd(), join(target, "activate.sh")).split(sep).join("/") + " && les active <provider>");
+  console.log("LES is already repo-local. Run: npx -y github:hakienit/les#v" + packageMetadata.version + " active <provider>");
 }
 
 async function update(target, options) {
@@ -351,25 +382,20 @@ async function update(target, options) {
     throw new Error("Collision: unmanaged files exist in the LES root: " + unmanaged.join(", "));
   }
   const changes = await changesFor(target);
-  if (!changes.length && manifest.packageVersion === packageMetadata.version) {
-    if (options.scope === "repo" && !await exists(repoManifestPath(target))) {
-      await writeRepoManifest(target, manifest);
-      console.log("Restored " + repoManifestPath(target) + ".");
-      return;
-    }
+  const ignoreNeeded = options.scope === "repo" && await needsRepoIgnore(target);
+  if (!changes.length && manifest.packageVersion === packageMetadata.version && !ignoreNeeded) {
     console.log("Already pinned to " + packageMetadata.version + ".");
     return;
   }
-  printPlan("update", target, changes.length ? changes : ["refresh manifest to " + packageMetadata.version]);
+  const plan = changes.length ? changes : ["refresh manifest to " + packageMetadata.version];
+  if (ignoreNeeded) plan.push("add " + repoIgnoreEntry(target) + " to .gitignore");
+  printPlan("update", target, plan);
   if (options.dryRun) {
     return;
   }
+  if (ignoreNeeded) await ensureRepoIgnore(target);
   // ponytail: no cross-process lock; add one only if concurrent installs become supported.
   const backup = await install(target, options.scope, true, manifest.adapters || [], manifest.configuredAdapters || manifest.adapters || []);
-  if (options.scope === "repo") {
-    await writeActivation(target);
-    await writeRepoManifest(target, await readManifest(target));
-  }
   console.log("Updated to " + packageMetadata.version + ". Backup: " + backup);
 }
 
@@ -396,13 +422,13 @@ async function rollback(target, options) {
     await rename(displaced, target);
     throw error;
   }
-  if (options.scope === "repo") {
-    await writeRepoManifest(target, await readManifest(target));
-  }
   console.log("Rolled back. Displaced installation: " + displaced);
 }
 
 async function setAdapter(target, provider, options, enabled) {
+  if (!await exists(join(target, manifestFilename)) && await exists(join(target, "les-manifest.json"))) {
+    await update(target, options);
+  }
   const manifest = await readManifest(target);
   const source = adapterSourceFor(target, provider);
   if (!await exists(source)) {
@@ -432,10 +458,7 @@ async function setAdapter(target, provider, options, enabled) {
     if (current !== undefined) await rm(entry);
     manifest.adapters = (manifest.adapters || []).filter((name) => name !== provider);
   }
-  await writeFile(join(target, "les-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
-  if (options.scope === "repo") {
-    await writeRepoManifest(target, manifest);
-  }
+  await writeManifest(target, manifest);
   console.log((enabled ? "Enabled " : "Disabled ") + provider + " routing.");
 }
 
@@ -491,7 +514,7 @@ async function doctor(target) {
   statuses.push(doctorLine(spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0 ? "READY" : "FALLBACK", "git", "recommended project tool"));
   statuses.push(doctorLine("SKIPPED", "browser-automation", "optional capability is not selected"));
   statuses.push(doctorLine("SKIPPED", "project-tracker-connector", "optional capability is not selected"));
-  statuses.push(doctorLine(await exists(join(target, "les-manifest.json")) ? "READY" : "PENDING_USER_ACTION", "installation", "run les add when no manifest exists"));
+  statuses.push(doctorLine(await exists(join(target, manifestFilename)) || await exists(join(target, "les-manifest.json")) ? "READY" : "PENDING_USER_ACTION", "installation", "run les add when no manifest exists"));
   if (process.env.LES_PROVIDER) {
     const provider = process.env.LES_PROVIDER;
     const command = { codex: "codex", "claude-code": "claude", "gemini-cli": "gemini", antigravity: "antigravity" }[provider];
