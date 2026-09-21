@@ -26,7 +26,26 @@ const payload = [
 ];
 
 function usage() {
-  console.log("Usage: les [add] | les <update|rollback|doctor|diff|on|off|adapter> [provider] [--scope repo|global] [--root .les-agents] [--dry-run]");
+  console.log(`LES repo-local CLI
+
+Usage:
+  les                         install the default repo payload
+  les init                    initialize the local shell activation helper
+  les active <provider>       register and enable a provider
+  les on [provider]           enable one or all registered providers
+  les off [provider]          disable one or all providers
+  les doctor                  show installation and routing status
+  les diff                    show managed payload differences
+  les update                  refresh the payload from this CLI source
+  les rollback --backup PATH  restore a prior update backup
+
+Providers: codex, claude-code, gemini-cli, antigravity
+Options: --root PATH, --scope repo|global, --dry-run
+
+Install from GitHub:
+  npx -y github:hakienit/les
+  les init
+  les active codex`);
 }
 
 function parseArgs(argv) {
@@ -35,7 +54,7 @@ function parseArgs(argv) {
   let provider;
   for (let index = 0; index < rest.length; index += 1) {
     const value = rest[index];
-    if (["adapter", "on", "off"].includes(command) && !provider && !value.startsWith("-")) {
+    if (["adapter", "active", "on", "off"].includes(command) && !provider && !value.startsWith("-")) {
       provider = value;
       continue;
     }
@@ -61,15 +80,15 @@ function parseArgs(argv) {
       throw new Error("Unknown option: " + value);
     }
   }
-  if (!["add", "update", "rollback", "doctor", "diff", "adapter", "on", "off"].includes(command)) {
+  if (!["add", "init", "update", "rollback", "doctor", "diff", "adapter", "active", "on", "off"].includes(command)) {
     usage();
-    throw new Error("Choose add, update, rollback, doctor, diff, on, off, or adapter.");
+    throw new Error("Choose add, init, update, rollback, doctor, diff, active, on, off, or adapter.");
   }
   if (!["repo", "global"].includes(options.scope)) {
     throw new Error("--scope must be repo or global.");
   }
-  if (["adapter", "on", "off"].includes(command) && !provider && command === "adapter") {
-    throw new Error("Adapter requires codex, claude-code, gemini-cli, or antigravity.");
+  if (["adapter", "active"].includes(command) && !provider) {
+    throw new Error(command + " requires codex, claude-code, gemini-cli, or antigravity.");
   }
   if (["on", "off"].includes(command) && options.scope !== "repo") {
     throw new Error("on/off are repo-local; use --scope repo.");
@@ -207,6 +226,10 @@ async function writeRepoManifest(target, manifest) {
   ].join("\n"));
 }
 
+async function writeActivation(target) {
+  await writeFile(join(target, "activate.sh"), "export PATH=\"$PWD/" + relative(process.cwd(), join(target, "bin")).split(sep).join("/") + ":$PATH\"\n");
+}
+
 async function readManifest(target) {
   const manifestPath = join(target, "les-manifest.json");
   if (!await exists(manifestPath)) {
@@ -223,13 +246,14 @@ async function unmanagedFiles(target, manifest) {
   const known = new Set(manifest.managed.map((entry) => entry.path));
   known.add("les-manifest.json");
   known.add("les-manifest.yaml");
+  known.add("activate.sh");
   return (await filesBelow(target)).filter((relativePath) => !known.has(relativePath));
 }
 
 async function changesFor(target) {
   const manifest = await readManifest(target);
   const source = await sourceFiles();
-  const installed = new Set((await filesBelow(target)).filter((path) => !["les-manifest.json", "les-manifest.yaml"].includes(path)));
+  const installed = new Set((await filesBelow(target)).filter((path) => !["les-manifest.json", "les-manifest.yaml", "activate.sh"].includes(path)));
   const changes = [];
   for (const [relativePath, sourcePath] of source) {
     const installedPath = join(target, relativePath);
@@ -306,9 +330,18 @@ async function add(target, options) {
     await writeRepoManifest(target, await readManifest(target));
   }
   console.log("Installed " + packageMetadata.name + "@" + packageMetadata.version + ".");
-  if (options.scope === "repo") {
-    console.log("Run: export PATH=\"$PWD/" + relative(process.cwd(), join(target, "bin")).split(sep).join("/") + ":$PATH\"");
+  if (options.scope === "repo") console.log("Next: export PATH=\"$PWD/" + relative(process.cwd(), join(target, "bin")).split(sep).join("/") + ":$PATH\" && les init");
+}
+
+async function init(target, options) {
+  await readManifest(target);
+  if (options.dryRun) {
+    printPlan("init", join(target, "activate.sh"), ["write the repo-local PATH helper"]);
+    return;
   }
+  await writeActivation(target);
+  console.log("Initialized repo-local LES.");
+  console.log("Run: source " + relative(process.cwd(), join(target, "activate.sh")).split(sep).join("/") + " && les active <provider>");
 }
 
 async function update(target, options) {
@@ -334,6 +367,7 @@ async function update(target, options) {
   // ponytail: no cross-process lock; add one only if concurrent installs become supported.
   const backup = await install(target, options.scope, true, manifest.adapters || [], manifest.configuredAdapters || manifest.adapters || []);
   if (options.scope === "repo") {
+    await writeActivation(target);
     await writeRepoManifest(target, await readManifest(target));
   }
   console.log("Updated to " + packageMetadata.version + ". Backup: " + backup);
@@ -498,7 +532,9 @@ try {
     await rollback(target, options);
   } else if (command === "diff") {
     process.exitCode = await diff(target);
-  } else if (command === "adapter" || (command === "on" && provider) || (command === "off" && provider)) {
+  } else if (command === "init") {
+    await init(target, options);
+  } else if (command === "adapter" || command === "active" || (command === "on" && provider) || (command === "off" && provider)) {
     await setAdapter(target, provider, options, command !== "off");
   } else if (command === "on" || command === "off") {
     await setAllAdapters(target, options, command === "on");

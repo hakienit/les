@@ -60,6 +60,13 @@ export PATH="$PWD/.les-agents/bin:$PATH"
 After that, use the short `les` command. This changes only the current shell's
 PATH; it does not install a global command or modify global agent directories.
 
+Initialize the repo-local activation helper:
+
+~~~sh
+les init
+source .les-agents/activate.sh
+~~~
+
 The install is collision-safe. An existing `.les-agents/` or project-owned
 manifest stops the command instead of overwriting files.
 
@@ -77,14 +84,17 @@ npx -y github:hakienit/les#v0.1.0
 
 ### Enable routing
 
-Install does not modify provider entrypoints. Enable only the CLI you want:
+Register and enable only the CLI you want:
 
 ~~~sh
-les on codex
-les on claude-code
-les on gemini-cli
-les on antigravity
+les active codex
+les active claude-code
+les active gemini-cli
+les active antigravity
 ~~~
+
+`active` writes only the selected repo-local provider pointer. It does not
+modify global agent directories.
 
 The repo-local pointer locations are:
 
@@ -146,7 +156,7 @@ are present inside `.les-agents/`. Restore a backup with:
 les rollback --backup <backup-path>
 ~~~
 
-The older `adapter <provider>` command remains an alias for `on <provider>`.
+The older `adapter <provider>` command remains an alias for `active <provider>`.
 
 ### Custom repo-local root
 

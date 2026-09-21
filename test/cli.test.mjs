@@ -81,7 +81,8 @@ test("default install is repo-local and routing can be toggled per provider or a
     assert.equal(run([], project, env).status, 0);
     const installedLes = join(project, ".les-agents", "bin", "les");
     const localRun = (args) => spawnSync(installedLes, args, { cwd: project, encoding: "utf8", env: { ...process.env, ...env } });
-    assert.equal(localRun(["on", "codex"]).status, 0);
+    assert.equal(localRun(["init"]).status, 0);
+    assert.equal(localRun(["active", "codex"]).status, 0);
     assert.match(await readFile(join(project, "AGENTS.md"), "utf8"), /\.les-agents\/adapters\/codex\/AGENTS\.md/);
     assert.equal(await access(join(globalHome, ".codex", "AGENTS.md")).then(() => true).catch(() => false), false);
 
