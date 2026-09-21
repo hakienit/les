@@ -26,7 +26,7 @@ receive that source tree.
 ~~~sh
 cd my-project
 les init
-les active codex
+les connect
 ~~~
 
 `les init` creates one tracked Markdown entrypoint:
@@ -35,8 +35,14 @@ les active codex
 LES-AGENT.md
 ~~~
 
-It points the AI CLI to `~/.les-agents`. `les active <provider>` then creates a
-small native pointer to `LES-AGENT.md`:
+It points the AI CLI to `~/.les-agents`. `les connect` detects the supported AI
+CLIs installed on the machine, lets you select one or more with Space and
+Enter, then lets you choose which connected providers are default-on. `Select
+all` is available in both steps. A connected provider that is not default-on
+can be enabled later with `les on <provider>`.
+
+LES creates a small native pointer to `LES-AGENT.md` for each default-on
+provider:
 
 | Provider | Pointer |
 | --- | --- |
@@ -59,7 +65,8 @@ les off codex
 ~~~
 
 The provider state is stored in the managed comment inside `LES-AGENT.md`, so
-there is no extra repo-local state file.
+there is no extra repo-local state file. `les active <provider>` remains a
+legacy compatibility alias for directly enabling one provider.
 
 ## Updates and status
 

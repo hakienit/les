@@ -3,6 +3,7 @@
 ## 1.0.2 - 2026-09-21
 
 - Fix `les doctor` missing newly published npm updates while a current-version cache entry is still fresh.
+- Add interactive `les connect` multi-provider discovery with `Select all` and default-on selection.
 
 ## 1.0.1 - 2026-09-21
 

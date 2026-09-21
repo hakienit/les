@@ -4,6 +4,7 @@ import { constants } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { emitKeypressEvents } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
@@ -13,6 +14,12 @@ const manifestFilename = "les-manifest.md";
 const agentFilename = "LES-AGENT.md";
 const legacyManagedFiles = new Set(["les-manifest.json", "les-manifest.yaml", "activate.sh"]);
 const packageFiles = [...new Set([...(packageMetadata.files || []), "package.json"])].filter((path) => path !== "package-lock.json");
+const supportedProviders = [
+  { name: "codex", command: "codex" },
+  { name: "claude-code", command: "claude" },
+  { name: "gemini-cli", command: "gemini" },
+  { name: "antigravity", command: "antigravity" }
+];
 
 function userRoot() {
   return process.env.LES_HOME || join(homedir(), ".les-agents");
@@ -33,7 +40,8 @@ function usage() {
 Usage:
   les                         install or update ~/.les-agents
   les init                    create LES-AGENT.md in the current repo
-  les active <provider>       enable a provider pointer in this repo
+  les connect                 connect one or more installed provider CLIs
+  les active <provider>       legacy alias for directly enabling one provider
   les on [provider]           enable one or all configured providers
   les off [provider]          disable one or all providers
   les doctor                  show install, routing, and update status
@@ -82,12 +90,12 @@ function parseArgs(argv) {
       throw new Error("Unknown option: " + value);
     }
   }
-  if (!["install", "add", "init", "update", "rollback", "doctor", "diff", "adapter", "active", "on", "off"].includes(command)) {
+  if (!["install", "add", "init", "update", "rollback", "doctor", "diff", "adapter", "active", "connect", "on", "off"].includes(command)) {
     usage();
-    throw new Error("Choose install, init, active, on, off, doctor, or a legacy add/update command.");
+    throw new Error("Choose install, init, connect, active, on, off, doctor, or a legacy add/update command.");
   }
   if (!["repo", "user", "global"].includes(options.scope)) throw new Error("--scope must be repo, user, or global.");
-  if (["init", "active", "on", "off"].includes(command) && options.scope !== "repo") {
+  if (["init", "connect", "active", "on", "off"].includes(command) && options.scope !== "repo") {
     throw new Error(command + " is repo-local; omit --scope or use --scope repo.");
   }
   if (["adapter", "active"].includes(command) && !provider) {
@@ -424,7 +432,7 @@ async function init(options) {
   if (options.dryRun) return;
   if (!await exists(path)) await writeAgentState(state);
   console.log("Initialized LES for this repository.");
-  console.log("Next: les active <provider>");
+  console.log("Next: les connect");
 }
 
 async function update(target, options) {
@@ -507,10 +515,160 @@ async function setAdapter(provider, options, enabled) {
   console.log((enabled ? "Enabled " : "Disabled ") + provider + " routing.");
 }
 
+function availableProviders() {
+  return supportedProviders
+    .filter(({ command }) => spawnSync(command, ["--version"], { stdio: "ignore" }).status === 0)
+    .map(({ name }) => name);
+}
+
+function renderProviderSelector(title, providers, cursor, selected) {
+  if (process.stdout.isTTY) process.stdout.write("\x1b[2J\x1b[H");
+  const allSelected = selected.size === providers.length;
+  const rows = ["Select all", ...providers];
+  process.stdout.write("\n" + title + "\n");
+  process.stdout.write("  ↑/↓ move, Space select, Enter confirm\n");
+  rows.forEach((label, index) => {
+    const checked = index === 0 ? allSelected : selected.has(label);
+    process.stdout.write((cursor === index ? "> " : "  ") + "[" + (checked ? "x" : " ") + "] " + label + "\n");
+  });
+}
+
+let nonTTYInputPromise;
+let nonTTYInput = "";
+let nonTTYInputLoaded = false;
+
+async function selectProviders(title, providers, initial = [], required = false) {
+  const selected = new Set(initial);
+  let cursor = 0;
+  const stdin = process.stdin;
+  const rowCount = providers.length + 1;
+  const finish = () => {
+    if (required && !selected.size) throw new Error("Select at least one provider.");
+    return providers.filter((provider) => selected.has(provider));
+  };
+  const applyKey = (input, key = {}) => {
+    if (key.ctrl && key.name === "c") throw new Error("Selection cancelled.");
+    if (key.name === "up") cursor = (cursor + rowCount - 1) % rowCount;
+    else if (key.name === "down") cursor = (cursor + 1) % rowCount;
+    else if (key.name === "space" || input === " ") {
+      if (cursor === 0) {
+        if (selected.size === providers.length) selected.clear();
+        else providers.forEach((provider) => selected.add(provider));
+      } else {
+        const provider = providers[cursor - 1];
+        if (selected.has(provider)) selected.delete(provider);
+        else selected.add(provider);
+      }
+    } else if (["return", "enter"].includes(key.name) || input === "\r" || input === "\n") {
+      return finish();
+    }
+    renderProviderSelector(title, providers, cursor, selected);
+  };
+
+  renderProviderSelector(title, providers, cursor, selected);
+  if (!stdin.isTTY) {
+    if (!nonTTYInputPromise) {
+      nonTTYInputPromise = new Promise((resolve) => {
+        let input = "";
+        stdin.setEncoding("utf8");
+        stdin.on("data", (chunk) => { input += chunk; });
+        stdin.on("end", () => resolve(input));
+      });
+    }
+    if (!nonTTYInputLoaded) {
+      nonTTYInput = await nonTTYInputPromise;
+      nonTTYInputLoaded = true;
+    }
+    for (let index = 0; index < nonTTYInput.length; index += 1) {
+      if (nonTTYInput.startsWith("\x1b[A", index) || nonTTYInput.startsWith("\x1b[B", index)) {
+        const key = nonTTYInput[index + 2] === "A" ? "up" : "down";
+        index += 2;
+        const result = applyKey("", { name: key });
+        if (result) {
+          nonTTYInput = nonTTYInput.slice(index + 1);
+          return result;
+        }
+      } else {
+        const input = nonTTYInput[index];
+        const result = applyKey(input, {});
+        if (result) {
+          if (input === "\r" && nonTTYInput[index + 1] === "\n") index += 1;
+          nonTTYInput = nonTTYInput.slice(index + 1);
+          return result;
+        }
+      }
+    }
+    throw new Error("Selection input ended before Enter.");
+  }
+
+  emitKeypressEvents(stdin);
+  stdin.setRawMode(true);
+  stdin.resume();
+  return new Promise((resolve, reject) => {
+    const onKeypress = (input, key = {}) => {
+      try {
+        const result = applyKey(input, key);
+        if (result) {
+          stdin.removeListener("keypress", onKeypress);
+          stdin.setRawMode(false);
+          stdin.pause();
+          resolve(result);
+        }
+      } catch (error) {
+        stdin.removeListener("keypress", onKeypress);
+        stdin.setRawMode(false);
+        stdin.pause();
+        reject(error);
+      }
+    };
+    stdin.on("keypress", onKeypress);
+  });
+}
+
+async function connect(options) {
+  const root = await requireUserStore();
+  const state = await readAgentState();
+  const providers = availableProviders();
+  if (!providers.length) throw new Error("No supported provider CLI found on PATH. Supported: " + supportedProviders.map(({ name }) => name).join(", ") + ".");
+  const selected = await selectProviders("Select provider CLIs to connect", providers, [], true);
+  const defaultOn = await selectProviders("Select provider CLIs to default on", selected, selected);
+  const plans = [];
+  for (const provider of selected) {
+    const source = adapterSourceFor(root, provider);
+    if (!await exists(source)) throw new Error("Adapter source is missing: " + source);
+    const entry = providerEntryFor(provider, "repo");
+    const pointer = adapterPointer(provider, localPointerSource(entry));
+    const current = await exists(entry) ? await readFile(entry, "utf8") : undefined;
+    if (current !== undefined && current !== pointer) throw new Error("Collision at " + entry + ". Add this pointer manually:\n" + pointer);
+    plans.push({ provider, entry, pointer, current });
+  }
+  printPlan("connect", localAgentPath(), selected.map((provider) => (defaultOn.includes(provider) ? provider + " (default on)" : provider)));
+  if (options.dryRun) return;
+  const defaults = new Set(defaultOn);
+  for (const { entry, pointer, current, provider } of plans) {
+    if (defaults.has(provider)) {
+      if (current === undefined) {
+        await mkdir(dirname(entry), { recursive: true });
+        await writeFile(entry, pointer);
+      }
+    } else if (current !== undefined) {
+      await rm(entry);
+    }
+  }
+  state.configuredProviders = [...new Set([...state.configuredProviders, ...selected])].sort();
+  state.activeProviders = [...new Set([
+    ...state.activeProviders.filter((provider) => !selected.includes(provider)),
+    ...defaultOn
+  ])].sort();
+  await writeAgentState(state);
+  console.log("Connected " + selected.join(", ") + ".");
+  console.log("Default on: " + (defaultOn.join(", ") || "none") + ".");
+}
+
 async function setAllAdapters(options, enabled) {
   const state = await readAgentState();
   const providers = enabled ? state.configuredProviders : state.activeProviders;
-  if (!providers.length) throw new Error("No configured provider. Use les active <provider> first.");
+  if (!providers.length) throw new Error("No configured provider. Use les connect first.");
   for (const provider of providers) await setAdapter(provider, options, enabled);
 }
 
@@ -613,7 +771,7 @@ async function doctor() {
   statuses.push(doctorLine(spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0 ? "READY" : "FALLBACK", "git", "recommended project tool"));
   if (process.env.LES_PROVIDER) {
     const provider = process.env.LES_PROVIDER;
-    const command = { codex: "codex", "claude-code": "claude", "gemini-cli": "gemini", antigravity: "antigravity" }[provider];
+    const command = supportedProviders.find((entry) => entry.name === provider)?.command;
     if (!command || !await exists(adapterSourceFor(root, provider))) {
       statuses.push(doctorLine("PENDING_USER_ACTION", "provider-adapter", provider + " has no compatible LES adapter"));
     } else if (spawnSync(command, ["--version"], { stdio: "ignore" }).status !== 0) {
@@ -663,6 +821,8 @@ try {
     await add(target, options);
   } else if (command === "init") {
     await init(options);
+  } else if (command === "connect") {
+    await connect(options);
   } else if (command === "update") {
     await update(target, options);
   } else if (command === "rollback") {

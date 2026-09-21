@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -12,11 +12,12 @@ const releaseVerifier = join(root, "bin", "verify-release.mjs");
 const inventoryVerifier = join(root, "bin", "verify-inventory.mjs");
 const packageMetadata = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
 
-function run(args, cwd, env = {}) {
+function run(args, cwd, env = {}, input) {
   return spawnSync(process.execPath, [cli, ...args], {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, LES_UPDATE_CHECK: "0", ...env }
+    env: { ...process.env, LES_UPDATE_CHECK: "0", ...env },
+    input
   });
 }
 
@@ -92,6 +93,38 @@ test("active preserves a project-owned provider entrypoint", async () => {
   } finally {
     await rm(project, { recursive: true, force: true });
     await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("connect discovers available CLIs and selects connected/default-on providers", async () => {
+  const project = await mkdtemp(join(tmpdir(), "les-cli-connect-"));
+  const home = await mkdtemp(join(tmpdir(), "les-cli-connect-home-"));
+  const cliBin = await mkdtemp(join(tmpdir(), "les-cli-connect-bin-"));
+  try {
+    for (const provider of ["codex", "gemini"]) {
+      const command = join(cliBin, provider);
+      await writeFile(command, "#!/bin/sh\nexit 0\n");
+      await chmod(command, 0o755);
+    }
+    const env = { LES_HOME: home, PATH: cliBin };
+    assert.equal(run([], project, env).status, 0);
+    assert.equal(run(["init"], project, env).status, 0);
+
+    const result = run(["connect"], project, env, " \r \x1b[B \r");
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Select all/);
+    const state = JSON.parse((await readFile(join(project, "LES-AGENT.md"), "utf8"))
+      .match(/<!-- LES-MANAGED\n([\s\S]*?)\n-->/u)[1]);
+    assert.deepEqual(state.configuredProviders, ["codex", "gemini-cli"]);
+    assert.deepEqual(state.activeProviders, ["codex"]);
+    assert.equal(await readFile(join(project, "AGENTS.md"), "utf8"), "# LES\n\n@./LES-AGENT.md\n");
+    assert.equal(await access(join(project, "GEMINI.md")).then(() => true).catch(() => false), false);
+    assert.equal(run(["on", "gemini-cli"], project, env).status, 0);
+    assert.equal(await readFile(join(project, "GEMINI.md"), "utf8"), "# LES\n\n@./LES-AGENT.md\n");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+    await rm(cliBin, { recursive: true, force: true });
   }
 });
 
