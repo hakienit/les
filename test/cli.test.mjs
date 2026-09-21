@@ -79,19 +79,21 @@ test("default install is repo-local and routing can be toggled per provider or a
   try {
     const env = { CODEX_HOME: join(globalHome, ".codex") };
     assert.equal(run([], project, env).status, 0);
-    assert.equal(run(["on", "codex"], project, env).status, 0);
+    const installedLes = join(project, ".les-agents", "bin", "les");
+    const localRun = (args) => spawnSync(installedLes, args, { cwd: project, encoding: "utf8", env: { ...process.env, ...env } });
+    assert.equal(localRun(["on", "codex"]).status, 0);
     assert.match(await readFile(join(project, "AGENTS.md"), "utf8"), /\.les-agents\/adapters\/codex\/AGENTS\.md/);
     assert.equal(await access(join(globalHome, ".codex", "AGENTS.md")).then(() => true).catch(() => false), false);
 
-    assert.equal(run(["off"], project, env).status, 0);
+    assert.equal(localRun(["off"]).status, 0);
     assert.equal(await access(join(project, "AGENTS.md")).then(() => true).catch(() => false), false);
     await writeFile(join(project, ".les-agents", "policies", "principles.md"), "changed\n");
-    assert.equal(run(["update"], project, env).status, 0);
-    assert.equal(run(["on"], project, env).status, 0);
+    assert.equal(localRun(["update"]).status, 0);
+    assert.equal(localRun(["on"]).status, 0);
     assert.equal(await access(join(project, "AGENTS.md")).then(() => true).catch(() => false), true);
 
     await writeFile(join(project, "AGENTS.md"), "project owned\n");
-    assert.equal(run(["off", "codex"], project, env).status, 2);
+    assert.equal(localRun(["off", "codex"]).status, 2);
   } finally {
     await rm(project, { recursive: true, force: true });
     await rm(globalHome, { recursive: true, force: true });

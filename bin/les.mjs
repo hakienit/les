@@ -10,6 +10,9 @@ import { spawnSync } from "node:child_process";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageMetadata = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 const payload = [
+  ["bin/les", "bin/les"],
+  ["bin/les.mjs", "bin/les.mjs"],
+  ["package.json", "package.json"],
   ["policies", "policies"],
   ["skills", "skills"],
   ["profiles", "profiles"],
@@ -303,6 +306,9 @@ async function add(target, options) {
     await writeRepoManifest(target, await readManifest(target));
   }
   console.log("Installed " + packageMetadata.name + "@" + packageMetadata.version + ".");
+  if (options.scope === "repo") {
+    console.log("Run: export PATH=\"$PWD/" + relative(process.cwd(), join(target, "bin")).split(sep).join("/") + ":$PATH\"");
+  }
 }
 
 async function update(target, options) {

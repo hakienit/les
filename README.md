@@ -40,14 +40,25 @@ It creates:
 ~~~text
 .les-agents/
 ├── adapters/
+├── bin/
 ├── policies/
 ├── profiles/
 ├── skills/
 ├── templates/
 ├── tools/
+├── package.json
 ├── les-manifest.json
 └── les-manifest.yaml
 ~~~
+
+The bundled launcher is repo-local. Add it to the current shell once:
+
+~~~sh
+export PATH="$PWD/.les-agents/bin:$PATH"
+~~~
+
+After that, use the short `les` command. This changes only the current shell's
+PATH; it does not install a global command or modify global agent directories.
 
 The install is collision-safe. An existing `.les-agents/` or project-owned
 manifest stops the command instead of overwriting files.
@@ -69,10 +80,10 @@ npx -y github:hakienit/les#v0.1.0
 Install does not modify provider entrypoints. Enable only the CLI you want:
 
 ~~~sh
-npx -y github:hakienit/les on codex
-npx -y github:hakienit/les on claude-code
-npx -y github:hakienit/les on gemini-cli
-npx -y github:hakienit/les on antigravity
+les on codex
+les on claude-code
+les on gemini-cli
+les on antigravity
 ~~~
 
 The repo-local pointer locations are:
@@ -93,20 +104,20 @@ If a pointer already exists, review the suggested pointer and add it manually.
 Disable one provider:
 
 ~~~sh
-npx -y github:hakienit/les off codex
+les off codex
 ~~~
 
 Disable all providers currently enabled:
 
 ~~~sh
-npx -y github:hakienit/les off
+les off
 ~~~
 
 `off` removes only an unchanged pointer created by LES. It leaves
 `.les-agents/` installed, so routing can be restored later:
 
 ~~~sh
-npx -y github:hakienit/les on
+les on
 ~~~
 
 The no-provider form toggles all providers previously configured with `on
@@ -116,10 +127,10 @@ The no-provider form toggles all providers previously configured with `on
 
 ~~~sh
 # Show managed differences
-npx -y github:hakienit/les diff
+les diff
 
 # Check installation and provider status
-npx -y github:hakienit/les doctor
+les doctor
 
 # Update the payload; project-owned files are preserved
 npx -y github:hakienit/les update
@@ -132,7 +143,7 @@ npx -y github:hakienit/les update --dry-run
 are present inside `.les-agents/`. Restore a backup with:
 
 ~~~sh
-npx -y github:hakienit/les rollback --backup <backup-path>
+les rollback --backup <backup-path>
 ~~~
 
 The older `adapter <provider>` command remains an alias for `on <provider>`.

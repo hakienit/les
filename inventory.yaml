@@ -73,7 +73,7 @@
   "routes": "routes.yaml",
   "files": [
     "package.json", "README.md", "CHANGELOG.md", "LICENSE", "inventory.yaml", "routes.yaml",
-    "bin/les.mjs", "bin/verify-inventory.mjs", "bin/verify-release.mjs", "bin/generate-adapter-manifests.mjs",
+    "bin/les", "bin/les.mjs", "bin/verify-inventory.mjs", "bin/verify-release.mjs", "bin/generate-adapter-manifests.mjs",
     "policies/README.md", "policies/principles.md", "policies/precedence.md", "policies/lifecycle.md", "policies/risk-model.md", "policies/memory-model.md", "policies/verification.md", "policies/workflow-contracts.md",
     "policies/rules/ai-authority.md", "policies/rules/architecture.md", "policies/rules/coding-quality.md", "policies/rules/testing.md", "policies/rules/security.md", "policies/rules/git-safety.md", "policies/rules/dependencies.md", "policies/rules/technical-decisions.md", "policies/rules/file-organization.md", "policies/rules/documentation.md", "policies/rules/error-handling.md", "policies/rules/context-loading.md", "policies/rules/definition-of-done.md", "policies/rules/change-scope.md",
     "policies/workflows/task-lifecycle.md", "policies/workflows/feature-delivery.md", "policies/workflows/bug-fixing.md", "policies/workflows/refactoring.md", "policies/workflows/investigation.md", "policies/workflows/incident-hotfix.md", "policies/workflows/review.md", "policies/workflows/verification.md", "policies/workflows/handoff-recovery.md", "policies/workflows/knowledge-promotion.md",
