@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 - 2026-09-21
+
+- Add `les-ui-preview-gate` for Figma/wireframe preview selection before frontend implementation.
+- Add bounded primary/specialist frontend route selection evidence and gallery status guidance.
+
 ## 1.0.0 - 2026-09-21
 
 - Install LES once in user-local `~/.les-agents`; repositories keep only `LES-AGENT.md` and provider pointers.

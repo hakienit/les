@@ -1,0 +1,8 @@
+[
+  {"prompt":"implement UI from Figma","selected":["les-ui-preview-gate"]},
+  {"prompt":"build a form UI","selected":["les-frontend"]},
+  {"prompt":"design a responsive dashboard","selected":["les-frontend-design"]},
+  {"prompt":"check keyboard navigation","selected":["les-accessibility-review"]},
+  {"prompt":"measure slow page render","selected":["les-frontend-performance"]},
+  {"prompt":"verify responsive page","selected":["les-frontend-verification"]}
+]

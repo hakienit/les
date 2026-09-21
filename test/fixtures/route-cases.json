@@ -3,6 +3,7 @@
   {"route":"investigation","prompt":"diagnose timeout","expected":"les-investigation","nearMiss":"apply known fix"},
   {"route":"accessibility","prompt":"check keyboard navigation","expected":"les-accessibility-review","nearMiss":"database migration"},
   {"route":"frontend-ui","prompt":"build a form UI","expected":"les-frontend","nearMiss":"backend endpoint"},
+  {"route":"frontend-preview","prompt":"implement UI from Figma","expected":"les-ui-preview-gate","nearMiss":"build a form UI"},
   {"route":"frontend-design","prompt":"design a responsive dashboard","expected":"les-frontend-design","nearMiss":"database migration"},
   {"route":"frontend-experience","prompt":"review checkout experience","expected":"les-frontend-experience-review","nearMiss":"review database schema"},
   {"route":"frontend-performance","prompt":"measure slow page render","expected":"les-frontend-performance","nearMiss":"server benchmark"},

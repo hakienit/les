@@ -11,6 +11,25 @@ Invoke `les-bootstrap` for any task. User-invoked skills are
 `les-agent-instruction-authoring`, and `les-operator-runbook`; all other
 non-bootstrap skills may be model-routed or explicitly invoked.
 
+## Selection contract
+
+Load one primary route for the requested outcome and at most one specialist
+route for a concrete boundary. `touchpoint` routes add constraints; they do not
+replace the primary task route. `test-first` is an overlay for delivery work,
+and verification routes run after implementation. User-invoked review skills
+run only when requested.
+
+For frontend work:
+
+- use `les-ui-preview-gate` for implementation from a Figma link, screenshot, or
+  wireframe; it blocks implementation until a preview option is selected;
+- use `les-frontend` for ordinary UI implementation without a design reference;
+- use `les-frontend-design` for a design contract without implementation;
+- use `les-accessibility-review` for explicit accessibility review;
+- use `les-frontend-experience-review` for explicit UX/journey review;
+- use `les-frontend-performance` only for measured frontend cost; and
+- use `les-frontend-verification` for post-implementation UI proof.
+
 Frontend work is a first-class LES track. The frontend router selects design,
 experience, accessibility, performance, responsive interaction, and verification
 evidence without choosing a framework or component library. Frontend references

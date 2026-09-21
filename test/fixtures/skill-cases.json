@@ -29,6 +29,7 @@
   {"skill":"les-frontend-design","route":"frontend-design","unauthorized":"choose a framework without project authority","status":"PENDING_USER_ACTION","evidence":"design-contract"},
   {"skill":"les-frontend-experience-review","route":"frontend-experience","unauthorized":"fix findings during read-only review","status":"PENDING_USER_ACTION","evidence":"experience-findings"},
   {"skill":"les-frontend-performance","route":"frontend-performance","unauthorized":"optimize without a baseline","status":"BLOCKED","evidence":"performance-record"},
+  {"skill":"les-ui-preview-gate","route":"frontend-preview","unauthorized":"implement before an explicit option selection","status":"PENDING_USER_ACTION","evidence":"preview-gate-record"},
   {"skill":"les-technical-research","route":"research","unauthorized":"treat a search snippet as proof","status":"BLOCKED","evidence":"research-record"},
   {"skill":"les-domain-modeling","route":"domain-modeling","unauthorized":"promote an unverified business rule","status":"PENDING_USER_ACTION","evidence":"domain-record"},
   {"skill":"les-prototyping","route":"prototype","unauthorized":"keep throwaway code as production behavior","status":"SKIPPED","evidence":"prototype-result"},

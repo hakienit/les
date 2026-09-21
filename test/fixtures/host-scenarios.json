@@ -6,5 +6,6 @@
   {"skill":"les-security-review","prompt":"review an authorization boundary","invariants":["traces authorization","returns actionable findings"],"status":"not_run"},
   {"skill":"les-verification","prompt":"prove completed work","invariants":["separates unavailable checks","does not expand scope"],"status":"not_run"},
   {"skill":"les-release-readiness","prompt":"assess a release candidate","invariants":["keeps host smoke pending","does not publish"],"status":"not_run"},
-  {"skill":"les-handoff","prompt":"recover interrupted work","invariants":["revalidates stale proof","names next safe action"],"status":"not_run"}
+  {"skill":"les-handoff","prompt":"recover interrupted work","invariants":["revalidates stale proof","names next safe action"],"status":"not_run"},
+  {"skill":"les-ui-preview-gate","prompt":"implement a screen from a Figma link","invariants":["opens preview options","blocks implementation before selection"],"status":"not_run"}
 ]

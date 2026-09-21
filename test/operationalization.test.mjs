@@ -92,6 +92,23 @@ test("route fixtures keep specialized skills away from near misses", async () =>
   }
 });
 
+test("frontend selection fixtures keep one primary preview or specialist choice", async () => {
+  const [routes, fixtures] = await Promise.all([
+    readJson("routes.yaml"),
+    readJson("test/fixtures/frontend-selection-cases.json")
+  ]);
+  for (const fixture of fixtures) {
+    const route = routes.routes.find((candidate) => candidate.examples.includes(fixture.prompt));
+    assert.ok(route, "missing route example: " + fixture.prompt);
+    assert.deepEqual(fixture.selected, [route.skill]);
+    assert.ok(fixture.selected.length >= 1 && fixture.selected.length <= 2);
+  }
+  const preview = routes.routes.find((route) => route.id === "frontend-preview");
+  assert.equal(preview?.role, "primary");
+  assert.equal(preview?.phase, "design-gate");
+  assert.deepEqual(preview?.composeWith, ["frontend-verification"]);
+});
+
 test("unrun provider-neutral host scenarios cannot support a readiness claim", async () => {
   const scenarios = await readJson("test/fixtures/host-scenarios.json");
   assert.ok(scenarios.length >= 8);

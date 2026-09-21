@@ -42,7 +42,8 @@
     "les-frontend-verification",
     "les-frontend-design",
     "les-frontend-experience-review",
-    "les-frontend-performance"
+    "les-frontend-performance",
+    "les-ui-preview-gate"
   ],
   "modelInvokedSkills": [
     "les-discovery",
@@ -75,7 +76,8 @@
     "les-frontend",
     "les-frontend-verification",
     "les-frontend-design",
-    "les-frontend-performance"
+    "les-frontend-performance",
+    "les-ui-preview-gate"
   ],
   "userInvokedSkills": [
     "les-security-review",
