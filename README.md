@@ -158,6 +158,21 @@ les rollback --backup <backup-path>
 
 The older `adapter <provider>` command remains an alias for `active <provider>`.
 
+### Uninstall
+
+LES does not currently provide an `uninstall` command. Remove it safely from a
+repo with:
+
+~~~sh
+les off
+rm -rf .les-agents
+~~~
+
+`les off` removes only unchanged provider pointers created by LES. If a pointer
+was edited or belongs to the project, LES stops instead of deleting it. The
+PATH export is shell-local; remove the same export line from your shell profile
+if you added it there permanently.
+
 ### Custom repo-local root
 
 `.les-agents` is the default. A different relative directory can be selected:
