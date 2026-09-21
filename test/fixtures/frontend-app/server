@@ -1,0 +1,33 @@
+#!/usr/bin/env node
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = fileURLToPath(new URL(".", import.meta.url));
+const port = Number(process.env.PORT || process.argv[2] || 4173);
+const files = new Map([
+  ["/", ["index.html", "text/html; charset=utf-8"]],
+  ["/index.html", ["index.html", "text/html; charset=utf-8"]],
+  ["/fixture-data.json", ["fixture-data.json", "application/json"]]
+]);
+
+const server = createServer(async (request, response) => {
+  const entry = files.get(request.url);
+  if (!entry) {
+    response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    response.end("not found");
+    return;
+  }
+  try {
+    const body = await readFile(join(root, entry[0]));
+    response.writeHead(200, { "content-type": entry[1], "cache-control": "no-store" });
+    response.end(body);
+  } catch {
+    response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+    response.end("fixture error");
+  }
+});
+
+server.listen(port, "127.0.0.1", () => console.log(`LES frontend fixture listening on http://127.0.0.1:${port}`));
+process.on("SIGTERM", () => server.close(() => process.exit(0)));

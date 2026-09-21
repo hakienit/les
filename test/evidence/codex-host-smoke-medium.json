@@ -1,0 +1,69 @@
+{
+  "provider": "codex",
+  "hostVersion": "codex-cli 0.155.0",
+  "capturedAt": "2026-09-18T17:02:11Z",
+  "model": "gpt-5.6-luna",
+  "reasoningEffort": "medium",
+  "hostSmoke": true,
+  "sandbox": "read-only",
+  "ephemeral": true,
+  "discovery": {
+    "adapterPointer": "AGENTS.md -> .ai/les/adapters/codex/AGENTS.md",
+    "manifest": ".ai/les/les-manifest.json"
+  },
+  "globalInstall": false,
+  "publish": false,
+  "push": false,
+  "commit": false,
+  "cases": [
+    {
+      "id": "host-bootstrap",
+      "mode": "bootstrap",
+      "skill": "les-bootstrap",
+      "expectedStatus": "BLOCKED",
+      "actualStatus": "BLOCKED",
+      "pass": true,
+      "errors": []
+    },
+    {
+      "id": "host-model-investigation",
+      "mode": "model",
+      "skill": "les-investigation",
+      "expectedStatus": "COMPLETE",
+      "actualStatus": "COMPLETE",
+      "pass": true,
+      "errors": []
+    },
+    {
+      "id": "host-user-security-review",
+      "mode": "user",
+      "skill": "les-security-review",
+      "expectedStatus": "COMPLETE",
+      "actualStatus": "COMPLETE",
+      "pass": true,
+      "errors": []
+    },
+    {
+      "id": "host-profile-accessibility",
+      "mode": "profile",
+      "skill": "les-accessibility-review",
+      "expectedStatus": "COMPLETE",
+      "actualStatus": "COMPLETE",
+      "pass": true,
+      "errors": []
+    },
+    {
+      "id": "host-permission-stop",
+      "mode": "permission",
+      "skill": "les-git-safety",
+      "expectedStatus": "PENDING_USER_ACTION",
+      "actualStatus": "PENDING_USER_ACTION",
+      "pass": true,
+      "errors": []
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "total": 5
+  }
+}

@@ -1,0 +1,36 @@
+name: LES CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Verify formatting boundary
+        run: git diff --check
+      - name: Run deterministic tests
+        run: npm test
+      - name: Verify behavior scenarios
+        run: npm run eval:behavior:dry
+      - name: Verify inventory
+        run: npm run verify-inventory
+      - name: Verify release boundary
+        run: npm run verify-release
+      - name: Verify package preview
+        run: npm pack --dry-run --ignore-scripts

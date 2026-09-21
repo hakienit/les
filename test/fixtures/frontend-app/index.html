@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LES Frontend Evidence Lab</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #172033;
+        --muted: #5d6b82;
+        --surface: #ffffff;
+        --surface-alt: #edf4ff;
+        --accent: #0759d6;
+        --accent-dark: #0342a5;
+        --danger: #a52222;
+        --ring: #f59e0b;
+        --radius: 18px;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: linear-gradient(135deg, #e9f2ff, #f8fbff 58%, #e8fff6); color: var(--ink); }
+      a { color: var(--accent-dark); }
+      :focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+      .shell { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 56px; }
+      header { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 28px; }
+      .eyebrow { color: var(--accent-dark); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: .78rem; }
+      h1 { max-width: 620px; margin: 8px 0; font-size: clamp(2.1rem, 6vw, 4.8rem); line-height: .98; letter-spacing: -.06em; }
+      .lede { max-width: 620px; color: var(--muted); font-size: 1.1rem; line-height: 1.55; }
+      .grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 20px; }
+      .card { background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid #d5e2f5; border-radius: var(--radius); box-shadow: 0 18px 48px #193c6618; padding: 24px; }
+      .card h2 { margin-top: 0; }
+      .state { min-height: 180px; display: grid; place-items: center; text-align: center; background: var(--surface-alt); border-radius: 14px; padding: 24px; }
+      .state .loading, .state .empty, .state .error, .state .content { display: none; }
+      .state[data-state="loading"] .loading, .state[data-state="empty"] .empty, .state[data-state="error"] .error { display: block; }
+      .state[data-state="success"] .content { display: block; }
+      .loading { animation: pulse 1.2s ease-in-out infinite; }
+      @keyframes pulse { 50% { opacity: .45; } }
+      .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+      button { min-height: 44px; border: 0; border-radius: 999px; padding: 10px 16px; color: white; background: var(--accent); font: inherit; font-weight: 750; cursor: pointer; }
+      button:hover { background: var(--accent-dark); }
+      button.secondary { color: var(--accent-dark); background: #dbe9ff; }
+      label { display: block; margin: 20px 0 7px; font-weight: 700; }
+      input { width: 100%; min-height: 46px; border: 2px solid #a9bad4; border-radius: 10px; padding: 10px 12px; font: inherit; }
+      .status { min-height: 28px; margin-top: 12px; color: var(--muted); }
+      .status[data-kind="error"] { color: var(--danger); font-weight: 700; }
+      .status[data-kind="success"] { color: #126b43; font-weight: 700; }
+      @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } header { display: block; } .shell { padding-top: 22px; } }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div>
+          <div class="eyebrow">LES frontend evidence lab</div>
+          <h1>One small surface, every important state.</h1>
+          <p class="lede">A disposable, framework-free journey for checking visual hierarchy, responsive layout, accessible interaction, boundary data, and honest browser evidence.</p>
+        </div>
+        <a href="#journey">Skip to journey</a>
+      </header>
+      <div class="grid" id="journey">
+        <section class="card" aria-labelledby="state-title">
+          <h2 id="state-title">Journey state</h2>
+          <div class="state" data-state="loading" aria-live="polite" aria-atomic="true">
+            <div class="loading">Loading a safe sample…</div>
+            <div class="empty"><strong>No sample selected</strong><p>Choose a state to continue.</p></div>
+            <div class="error"><strong>Sample unavailable</strong><p>Retry or choose the empty state.</p></div>
+            <div class="content"><strong>Sample loaded</strong><p>Boundary data arrived without a layout shift.</p></div>
+          </div>
+          <div class="controls" aria-label="Choose journey state">
+            <button type="button" data-state-button="success">Load sample</button>
+            <button type="button" class="secondary" data-state-button="empty">Show empty</button>
+            <button type="button" class="secondary" data-state-button="error">Show error</button>
+          </div>
+        </section>
+        <section class="card" aria-labelledby="form-title">
+          <h2 id="form-title">Boundary form</h2>
+          <p id="form-help">Use a valid email to test feedback and recovery.</p>
+          <form id="sample-form" novalidate>
+            <label for="email">Email address</label>
+            <input id="email" name="email" type="email" autocomplete="email" aria-describedby="form-help form-status" required>
+            <div class="status" id="form-status" role="status" aria-live="polite"></div>
+            <button type="submit">Continue</button>
+          </form>
+        </section>
+      </div>
+    </main>
+    <script>
+      const state = document.querySelector('.state');
+      const status = document.querySelector('#form-status');
+      const email = document.querySelector('#email');
+      document.querySelectorAll('[data-state-button]').forEach((button) => button.addEventListener('click', () => {
+        state.dataset.state = button.dataset.stateButton;
+      }));
+      document.querySelector('#sample-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (!email.value || !email.validity.valid) {
+          status.dataset.kind = 'error';
+          status.textContent = 'Enter a valid email address to continue.';
+          email.focus();
+          return;
+        }
+        status.dataset.kind = 'success';
+        status.textContent = 'Ready to continue with this safe sample.';
+      });
+      async function loadSample() {
+        try {
+          const response = await fetch('/fixture-data.json');
+          if (!response.ok) throw new Error('sample request failed');
+          await response.json();
+          state.dataset.state = 'success';
+        } catch {
+          state.dataset.state = 'error';
+        }
+      }
+      loadSample();
+    </script>
+  </body>
+</html>

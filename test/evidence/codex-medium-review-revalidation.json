@@ -1,0 +1,37 @@
+{
+  "provider": "codex",
+  "capturedAt": "2026-09-18T17:14:32.117Z",
+  "model": "gpt-5.6-luna",
+  "reasoningEffort": "medium",
+  "hostSmoke": false,
+  "sandbox": "read-only",
+  "ephemeral": true,
+  "repetitions": 1,
+  "repeatability": {
+    "review-read-only": {
+      "stable": true,
+      "statuses": [
+        "COMPLETE"
+      ]
+    }
+  },
+  "globalInstall": false,
+  "publish": false,
+  "push": false,
+  "commit": false,
+  "cases": [
+    {
+      "iteration": 1,
+      "id": "review-read-only",
+      "skill": "les-review",
+      "expectedStatus": "COMPLETE",
+      "actualStatus": "COMPLETE",
+      "pass": true,
+      "errors": []
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "total": 1
+  }
+}

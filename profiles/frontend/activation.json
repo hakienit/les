@@ -1,0 +1,7 @@
+{
+  "profile": "frontend",
+  "positiveTriggers": ["web interface", "component", "browser UI", "accessibility", "responsive layout", "visual design", "interaction design", "frontend performance", "user journey"],
+  "negativeTriggers": ["database-only", "backend-only", "CLI-only", "infrastructure-only"],
+  "precedence": ["universal LES policy", "frontend profile rules", "project decisions"],
+  "requiredTouchpoints": ["frontend-ui", "frontend-design", "accessibility", "frontend-experience", "frontend-performance", "frontend-verification"]
+}

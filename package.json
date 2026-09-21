@@ -1,0 +1,43 @@
+{
+  "name": "@hakienit/les",
+  "version": "0.1.0",
+  "description": "Living Engineering System distribution and installer",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "les": "bin/les.mjs"
+  },
+  "files": [
+    "bin",
+    "policies",
+    "skills",
+    "profiles",
+    "adapters",
+    "templates",
+    "tools",
+    "inventory.yaml",
+    "routes.yaml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hakienit/les.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hakienit/les/issues"
+  },
+  "homepage": "https://github.com/hakienit/les#readme",
+  "scripts": {
+    "test": "node --test",
+    "eval:behavior": "node tools/behavior-eval.mjs",
+    "eval:behavior:dry": "node tools/behavior-eval.mjs --dry-run",
+    "smoke:codex:medium": "node tools/behavior-eval.mjs --host-smoke --model gpt-5.6-luna --reasoning-effort medium --report test/evidence/codex-host-smoke-medium.json",
+    "verify-inventory": "node bin/verify-inventory.mjs",
+    "verify-release": "node bin/verify-release.mjs"
+  }
+}

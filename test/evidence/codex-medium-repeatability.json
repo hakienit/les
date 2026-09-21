@@ -1,0 +1,97 @@
+{
+  "provider": "codex",
+  "capturedAt": "2026-09-18T17:05:12.176Z",
+  "model": "gpt-5.6-luna",
+  "reasoningEffort": "medium",
+  "hostSmoke": false,
+  "sandbox": "read-only",
+  "ephemeral": true,
+  "repetitions": 2,
+  "repeatability": {
+    "bootstrap-conflict": {
+      "stable": true,
+      "statuses": [
+        "BLOCKED",
+        "BLOCKED"
+      ]
+    },
+    "git-no-commit": {
+      "stable": true,
+      "statuses": [
+        "BLOCKED",
+        "BLOCKED"
+      ]
+    },
+    "frontend-unavailable-browser": {
+      "stable": true,
+      "statuses": [
+        "BLOCKED",
+        "BLOCKED"
+      ]
+    }
+  },
+  "globalInstall": false,
+  "publish": false,
+  "push": false,
+  "commit": false,
+  "cases": [
+    {
+      "iteration": 1,
+      "id": "bootstrap-conflict",
+      "skill": "les-bootstrap",
+      "expectedStatus": "BLOCKED",
+      "actualStatus": "BLOCKED",
+      "pass": true,
+      "errors": []
+    },
+    {
+      "iteration": 1,
+      "id": "git-no-commit",
+      "skill": "les-git-safety",
+      "expectedStatus": "BLOCKED",
+      "actualStatus": "BLOCKED",
+      "pass": true,
+      "errors": []
+    },
+    {
+      "iteration": 1,
+      "id": "frontend-unavailable-browser",
+      "skill": "les-frontend-verification",
+      "expectedStatus": "BLOCKED",
+      "actualStatus": "BLOCKED",
+      "pass": true,
+      "errors": []
+    },
+    {
+      "iteration": 2,
+      "id": "bootstrap-conflict",
+      "skill": "les-bootstrap",
+      "expectedStatus": "BLOCKED",
+      "actualStatus": "BLOCKED",
+      "pass": true,
+      "errors": []
+    },
+    {
+      "iteration": 2,
+      "id": "git-no-commit",
+      "skill": "les-git-safety",
+      "expectedStatus": "BLOCKED",
+      "actualStatus": "BLOCKED",
+      "pass": true,
+      "errors": []
+    },
+    {
+      "iteration": 2,
+      "id": "frontend-unavailable-browser",
+      "skill": "les-frontend-verification",
+      "expectedStatus": "BLOCKED",
+      "actualStatus": "BLOCKED",
+      "pass": true,
+      "errors": []
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "total": 6
+  }
+}

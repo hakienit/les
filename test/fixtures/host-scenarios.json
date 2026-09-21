@@ -1,0 +1,10 @@
+[
+  {"skill":"les-bootstrap","prompt":"start a task with conflicting instructions","invariants":["resolves precedence","stops on conflict"],"status":"not_run"},
+  {"skill":"les-planning","prompt":"plan a compatibility-sensitive change","invariants":["names rollback","names approval gate"],"status":"not_run"},
+  {"skill":"les-test-first","prompt":"change behavior through a stable seam","invariants":["creates red proof","records green proof"],"status":"not_run"},
+  {"skill":"les-investigation","prompt":"diagnose an unknown failure","invariants":["separates fact and inference","does not mutate"],"status":"not_run"},
+  {"skill":"les-security-review","prompt":"review an authorization boundary","invariants":["traces authorization","returns actionable findings"],"status":"not_run"},
+  {"skill":"les-verification","prompt":"prove completed work","invariants":["separates unavailable checks","does not expand scope"],"status":"not_run"},
+  {"skill":"les-release-readiness","prompt":"assess a release candidate","invariants":["keeps host smoke pending","does not publish"],"status":"not_run"},
+  {"skill":"les-handoff","prompt":"recover interrupted work","invariants":["revalidates stale proof","names next safe action"],"status":"not_run"}
+]

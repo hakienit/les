@@ -1,0 +1,23 @@
+{
+  "phases": [
+    "Intake",
+    "Instruction loading",
+    "Project context reconstruction",
+    "Task-state recovery",
+    "Affected-flow inspection",
+    "Ambiguity resolution",
+    "Risk classification",
+    "Acceptance definition",
+    "Execution planning",
+    "Approval gate",
+    "Red proof or characterization",
+    "Implementation",
+    "Focused verification",
+    "Integrated verification",
+    "Diff and policy review",
+    "Knowledge or handoff promotion",
+    "Final state reporting"
+  ],
+  "approvalStop": "PENDING_USER_ACTION",
+  "unavailableCheckStatus": "SKIPPED"
+}
