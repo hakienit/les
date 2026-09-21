@@ -27,16 +27,18 @@ experience review, and browser verification. The frontend track also carries
 progressively disclosed visual-quality, browser-protocol, and React/Next
 performance references synthesized from the strongest local systems.
 
-The CLI can stage a pinned, collision-safe copy under `.ai/les`:
+The CLI can stage a pinned, collision-safe copy under `.les-agents`:
 
 ~~~sh
-les add --scope repo --dry-run
-les add --scope repo
-les adapter codex --scope repo --dry-run
+npx -y github:hakienit/les
+npx -y github:hakienit/les on codex
+npx -y github:hakienit/les off codex
 ~~~
 
-It never initializes project templates automatically or overwrites an existing
-provider entrypoint.
+The default install is repo-local and never touches global agent directories.
+`on` and `off` manage provider pointers without overwriting project-owned files;
+omit the provider to toggle all configured providers. The old `adapter` command
+remains an alias for `on`.
 
 ## Local gates
 

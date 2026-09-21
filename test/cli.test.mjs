@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -28,12 +28,12 @@ test("add, diff, and update preserve a managed repo installation", async () => {
     assert.equal(added.status, 0, added.stderr);
     assert.equal(run(["add", "--scope", "repo"], project).status, 2);
 
-    const installRoot = join(project, ".ai", "les");
+    const installRoot = join(project, ".les-agents");
     const manifest = JSON.parse(await readFile(join(installRoot, "les-manifest.json"), "utf8"));
     assert.equal(manifest.packageName, "@hakienit/les");
     assert.equal(manifest.packageVersion, "0.1.0");
-    assert.match(await readFile(join(project, ".ai", "les-manifest.yaml"), "utf8"), /lesVersion: "0\.1\.0"/);
-    await rm(join(project, ".ai", "les-manifest.yaml"));
+    assert.match(await readFile(join(installRoot, "les-manifest.yaml"), "utf8"), /lesVersion: "0\.1\.0"/);
+    await rm(join(installRoot, "les-manifest.yaml"));
     const restored = run(["update", "--scope", "repo"], project);
     assert.equal(restored.status, 0, restored.stderr);
     assert.match(restored.stdout, /Restored/);
@@ -41,8 +41,8 @@ test("add, diff, and update preserve a managed repo installation", async () => {
     assert.equal(run(["adapter", "codex", "--scope", "repo", "--dry-run"], project).status, 0);
     assert.equal(run(["adapter", "codex", "--scope", "repo"], project).status, 0);
     assert.match(await readFile(join(project, "AGENTS.md"), "utf8"), /adapters[/\\]codex[/\\]AGENTS\.md/);
-    assert.match(await readFile(join(project, ".ai", "les-manifest.yaml"), "utf8"), /adapters: \["codex"\]/);
-    assert.equal(run(["adapter", "codex", "--scope", "repo"], project).status, 2);
+    assert.match(await readFile(join(installRoot, "les-manifest.yaml"), "utf8"), /adapters: \["codex"\]/);
+    assert.equal(run(["adapter", "codex", "--scope", "repo"], project).status, 0);
 
     assert.equal(run(["diff", "--scope", "repo"], project).status, 0);
     assert.equal(run(["doctor", "--scope", "repo"], project).status, 0);
@@ -67,9 +67,34 @@ test("add, diff, and update preserve a managed repo installation", async () => {
     const rolledBack = run(["rollback", "--scope", "repo", "--backup", backup], project);
     assert.equal(rolledBack.status, 0, rolledBack.stderr);
     assert.equal(await readFile(join(installRoot, "policies", "principles.md"), "utf8"), "changed\n");
-    assert.match(await readFile(join(project, ".ai", "les-manifest.yaml"), "utf8"), /adapters: \["codex"\]/);
+    assert.match(await readFile(join(installRoot, "les-manifest.yaml"), "utf8"), /adapters: \["codex"\]/);
   } finally {
     await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("default install is repo-local and routing can be toggled per provider or all at once", async () => {
+  const project = await mkdtemp(join(tmpdir(), "les-cli-routing-"));
+  const globalHome = await mkdtemp(join(tmpdir(), "les-cli-routing-home-"));
+  try {
+    const env = { CODEX_HOME: join(globalHome, ".codex") };
+    assert.equal(run([], project, env).status, 0);
+    assert.equal(run(["on", "codex"], project, env).status, 0);
+    assert.match(await readFile(join(project, "AGENTS.md"), "utf8"), /\.les-agents\/adapters\/codex\/AGENTS\.md/);
+    assert.equal(await access(join(globalHome, ".codex", "AGENTS.md")).then(() => true).catch(() => false), false);
+
+    assert.equal(run(["off"], project, env).status, 0);
+    assert.equal(await access(join(project, "AGENTS.md")).then(() => true).catch(() => false), false);
+    await writeFile(join(project, ".les-agents", "policies", "principles.md"), "changed\n");
+    assert.equal(run(["update"], project, env).status, 0);
+    assert.equal(run(["on"], project, env).status, 0);
+    assert.equal(await access(join(project, "AGENTS.md")).then(() => true).catch(() => false), true);
+
+    await writeFile(join(project, "AGENTS.md"), "project owned\n");
+    assert.equal(run(["off", "codex"], project, env).status, 2);
+  } finally {
+    await rm(project, { recursive: true, force: true });
+    await rm(globalHome, { recursive: true, force: true });
   }
 });
 

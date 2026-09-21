@@ -3,7 +3,7 @@ import { access, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeF
 import { constants } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
@@ -23,16 +23,16 @@ const payload = [
 ];
 
 function usage() {
-  console.log("Usage: les <add|update|rollback|doctor|diff|adapter> [provider] [--scope repo|global] [--dry-run]");
+  console.log("Usage: les [add] | les <update|rollback|doctor|diff|on|off|adapter> [provider] [--scope repo|global] [--root .les-agents] [--dry-run]");
 }
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
-  const options = { scope: "repo", dryRun: false, backup: undefined };
+  const options = { scope: "repo", root: ".les-agents", dryRun: false, backup: undefined };
   let provider;
   for (let index = 0; index < rest.length; index += 1) {
     const value = rest[index];
-    if (command === "adapter" && !provider && !value.startsWith("-")) {
+    if (["adapter", "on", "off"].includes(command) && !provider && !value.startsWith("-")) {
       provider = value;
       continue;
     }
@@ -40,6 +40,10 @@ function parseArgs(argv) {
       options.scope = rest[++index];
     } else if (value.startsWith("--scope=")) {
       options.scope = value.slice("--scope=".length);
+    } else if (value === "--root") {
+      options.root = rest[++index];
+    } else if (value.startsWith("--root=")) {
+      options.root = value.slice("--root=".length);
     } else if (value === "--dry-run") {
       options.dryRun = true;
     } else if (value === "--backup") {
@@ -54,28 +58,34 @@ function parseArgs(argv) {
       throw new Error("Unknown option: " + value);
     }
   }
-  if (!["add", "update", "rollback", "doctor", "diff", "adapter"].includes(command)) {
+  if (!["add", "update", "rollback", "doctor", "diff", "adapter", "on", "off"].includes(command)) {
     usage();
-    throw new Error("Choose add, update, rollback, doctor, diff, or adapter.");
+    throw new Error("Choose add, update, rollback, doctor, diff, on, off, or adapter.");
   }
   if (!["repo", "global"].includes(options.scope)) {
     throw new Error("--scope must be repo or global.");
   }
-  if (command === "adapter" && !provider) {
+  if (["adapter", "on", "off"].includes(command) && !provider && command === "adapter") {
     throw new Error("Adapter requires codex, claude-code, gemini-cli, or antigravity.");
+  }
+  if (["on", "off"].includes(command) && options.scope !== "repo") {
+    throw new Error("on/off are repo-local; use --scope repo.");
   }
   return { command, options, provider };
 }
 
-function targetFor(scope) {
+function targetFor(scope, root = ".les-agents") {
   if (scope === "global") {
     return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "les");
   }
-  return join(process.cwd(), ".ai", "les");
+  if (!root || root.startsWith("/") || root.split(/[\\/]/).includes("..")) {
+    throw new Error("--root must be a relative repo path without ..");
+  }
+  return resolve(process.cwd(), root);
 }
 
-function repoManifestPath() {
-  return join(process.cwd(), ".ai", "les-manifest.yaml");
+function repoManifestPath(target) {
+  return join(target, "les-manifest.yaml");
 }
 
 function providerEntryFor(provider, scope) {
@@ -96,6 +106,10 @@ function providerEntryFor(provider, scope) {
 function adapterSourceFor(target, provider) {
   const filename = provider === "codex" ? "AGENTS.md" : provider === "claude-code" ? "CLAUDE.md" : provider === "gemini-cli" ? "GEMINI.md" : "agent.md";
   return join(target, "adapters", provider, filename);
+}
+
+function adapterSourcePath(target, provider) {
+  return "./" + relative(process.cwd(), adapterSourceFor(target, provider)).split(sep).join("/");
 }
 
 function adapterPointer(provider, source) {
@@ -157,7 +171,7 @@ async function copyPayload(stage) {
   }
 }
 
-async function createManifest(stage, scope, adapters = []) {
+async function createManifest(stage, scope, adapters = [], configuredAdapters = adapters) {
   const managed = [];
   for (const relativePath of await filesBelow(stage)) {
     managed.push({ path: relativePath, sha256: await sha256(join(stage, relativePath)) });
@@ -169,21 +183,23 @@ async function createManifest(stage, scope, adapters = []) {
     scope,
     installedAt: new Date().toISOString(),
     managed,
-    adapters
+    adapters,
+    configuredAdapters: [...configuredAdapters]
   };
   await writeFile(join(stage, "les-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   return manifest;
 }
 
-async function writeRepoManifest(manifest) {
-  const path = repoManifestPath();
-  await mkdir(dirname(path), { recursive: true });
+async function writeRepoManifest(target, manifest) {
+  const path = repoManifestPath(target);
+  await mkdir(target, { recursive: true });
   await writeFile(path, [
     "manifestVersion: 1",
     "lesVersion: " + JSON.stringify(manifest.packageVersion),
-    "managedRoot: .ai/les",
+    "managedRoot: " + JSON.stringify(relative(process.cwd(), target).split(sep).join("/")),
     "profiles: []",
     "adapters: " + JSON.stringify(manifest.adapters || []),
+    "configuredAdapters: " + JSON.stringify(manifest.configuredAdapters || manifest.adapters || []),
     ""
   ].join("\n"));
 }
@@ -203,13 +219,14 @@ async function readManifest(target) {
 async function unmanagedFiles(target, manifest) {
   const known = new Set(manifest.managed.map((entry) => entry.path));
   known.add("les-manifest.json");
+  known.add("les-manifest.yaml");
   return (await filesBelow(target)).filter((relativePath) => !known.has(relativePath));
 }
 
 async function changesFor(target) {
   const manifest = await readManifest(target);
   const source = await sourceFiles();
-  const installed = new Set((await filesBelow(target)).filter((path) => path !== "les-manifest.json"));
+  const installed = new Set((await filesBelow(target)).filter((path) => !["les-manifest.json", "les-manifest.yaml"].includes(path)));
   const changes = [];
   for (const [relativePath, sourcePath] of source) {
     const installedPath = join(target, relativePath);
@@ -229,11 +246,11 @@ async function changesFor(target) {
   return changes.sort();
 }
 
-async function buildStage(target, scope, adapters) {
+async function buildStage(target, scope, adapters, configuredAdapters) {
   await mkdir(dirname(target), { recursive: true });
   const stage = await mkdtemp(join(dirname(target), "." + basename(target) + ".staging-"));
   await copyPayload(stage);
-  await createManifest(stage, scope, adapters);
+  await createManifest(stage, scope, adapters, configuredAdapters);
   return stage;
 }
 
@@ -241,8 +258,8 @@ function backupPath(target) {
   return join(dirname(target), "." + basename(target) + ".backup-" + Date.now());
 }
 
-async function install(target, scope, replace, adapters = []) {
-  const stage = await buildStage(target, scope, adapters);
+async function install(target, scope, replace, adapters = [], configuredAdapters = adapters) {
+  const stage = await buildStage(target, scope, adapters, configuredAdapters);
   let backup;
   try {
     if (replace) {
@@ -274,8 +291,8 @@ async function add(target, options) {
   if (await exists(target)) {
     throw new Error("Collision at " + target + ". Use les update only for an existing LES installation.");
   }
-  if (options.scope === "repo" && await exists(repoManifestPath())) {
-    throw new Error("Collision at " + repoManifestPath() + ". Resolve the existing LES metadata before adding a new installation.");
+  if (options.scope === "repo" && await exists(repoManifestPath(target))) {
+    throw new Error("Collision at " + repoManifestPath(target) + ". Resolve the existing LES metadata before adding a new installation.");
   }
   printPlan("add", target, ["write managed LES files pinned to " + packageMetadata.version]);
   if (options.dryRun) {
@@ -283,7 +300,7 @@ async function add(target, options) {
   }
   await install(target, options.scope, false);
   if (options.scope === "repo") {
-    await writeRepoManifest(await readManifest(target));
+    await writeRepoManifest(target, await readManifest(target));
   }
   console.log("Installed " + packageMetadata.name + "@" + packageMetadata.version + ".");
 }
@@ -296,9 +313,9 @@ async function update(target, options) {
   }
   const changes = await changesFor(target);
   if (!changes.length && manifest.packageVersion === packageMetadata.version) {
-    if (options.scope === "repo" && !await exists(repoManifestPath())) {
-      await writeRepoManifest(manifest);
-      console.log("Restored " + repoManifestPath() + ".");
+    if (options.scope === "repo" && !await exists(repoManifestPath(target))) {
+      await writeRepoManifest(target, manifest);
+      console.log("Restored " + repoManifestPath(target) + ".");
       return;
     }
     console.log("Already pinned to " + packageMetadata.version + ".");
@@ -309,9 +326,9 @@ async function update(target, options) {
     return;
   }
   // ponytail: no cross-process lock; add one only if concurrent installs become supported.
-  const backup = await install(target, options.scope, true, manifest.adapters || []);
+  const backup = await install(target, options.scope, true, manifest.adapters || [], manifest.configuredAdapters || manifest.adapters || []);
   if (options.scope === "repo") {
-    await writeRepoManifest(await readManifest(target));
+    await writeRepoManifest(target, await readManifest(target));
   }
   console.log("Updated to " + packageMetadata.version + ". Backup: " + backup);
 }
@@ -340,33 +357,55 @@ async function rollback(target, options) {
     throw error;
   }
   if (options.scope === "repo") {
-    await writeRepoManifest(await readManifest(target));
+    await writeRepoManifest(target, await readManifest(target));
   }
   console.log("Rolled back. Displaced installation: " + displaced);
 }
 
-async function addAdapter(target, provider, options) {
+async function setAdapter(target, provider, options, enabled) {
   const manifest = await readManifest(target);
   const source = adapterSourceFor(target, provider);
   if (!await exists(source)) {
     throw new Error("Adapter source is missing: " + source);
   }
   const entry = providerEntryFor(provider, options.scope);
-  if (await exists(entry)) {
-    throw new Error("Collision at " + entry + ". Add this pointer manually:\n" + adapterPointer(provider, source));
+  const pointer = adapterPointer(provider, adapterSourcePath(target, provider));
+  const current = await exists(entry) ? await readFile(entry, "utf8") : undefined;
+  if (enabled) {
+    if (current !== undefined && current !== pointer) {
+      throw new Error("Collision at " + entry + ". Add this pointer manually:\n" + pointer);
+    }
+    printPlan("on " + provider, entry, ["route work through " + source]);
+    if (options.dryRun) return;
+    if (current === undefined) {
+      await mkdir(dirname(entry), { recursive: true });
+      await writeFile(entry, pointer);
+    }
+    manifest.adapters = [...new Set([...(manifest.adapters || []), provider])].sort();
+    manifest.configuredAdapters = [...new Set([...(manifest.configuredAdapters || []), provider])].sort();
+  } else {
+    if (current !== undefined && current !== pointer) {
+      throw new Error("Cannot turn off " + provider + ": " + entry + " is not a LES-managed pointer.");
+    }
+    printPlan("off " + provider, entry, ["stop routing through " + source]);
+    if (options.dryRun) return;
+    if (current !== undefined) await rm(entry);
+    manifest.adapters = (manifest.adapters || []).filter((name) => name !== provider);
   }
-  printPlan("adapter " + provider, entry, ["write a routing pointer to " + source]);
-  if (options.dryRun) {
-    return;
-  }
-  await mkdir(dirname(entry), { recursive: true });
-  await writeFile(entry, adapterPointer(provider, source));
-  manifest.adapters = [...new Set([...(manifest.adapters || []), provider])].sort();
   await writeFile(join(target, "les-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   if (options.scope === "repo") {
-    await writeRepoManifest(manifest);
+    await writeRepoManifest(target, manifest);
   }
-  console.log("Installed " + provider + " routing pointer.");
+  console.log((enabled ? "Enabled " : "Disabled ") + provider + " routing.");
+}
+
+async function setAllAdapters(target, options, enabled) {
+  const manifest = await readManifest(target);
+  const providers = enabled ? (manifest.configuredAdapters || manifest.adapters || []) : (manifest.adapters || []);
+  if (!providers.length) {
+    throw new Error("No configured provider. Use les on <provider> first.");
+  }
+  for (const provider of providers) await setAdapter(target, provider, options, enabled);
 }
 
 async function diff(target) {
@@ -443,8 +482,8 @@ try {
     usage();
     process.exit(0);
   }
-  const { command, options, provider } = parseArgs(argv);
-  const target = targetFor(options.scope);
+  const { command, options, provider } = parseArgs(argv.length ? argv : ["add"]);
+  const target = targetFor(options.scope, options.root);
   if (command === "add") {
     await add(target, options);
   } else if (command === "update") {
@@ -453,8 +492,10 @@ try {
     await rollback(target, options);
   } else if (command === "diff") {
     process.exitCode = await diff(target);
-  } else if (command === "adapter") {
-    await addAdapter(target, provider, options);
+  } else if (command === "adapter" || (command === "on" && provider) || (command === "off" && provider)) {
+    await setAdapter(target, provider, options, command !== "off");
+  } else if (command === "on" || command === "off") {
+    await setAllAdapters(target, options, command === "on");
   } else {
     process.exitCode = await doctor(target);
   }
