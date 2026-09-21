@@ -17,28 +17,147 @@ add optional domain rules, and adapters route hosts to the same bootstrap.
 
 ## Use
 
-Invoke `skills/bootstrap/SKILL.md` explicitly, or route a supported host
-through its file in `adapters/`. `inventory.yaml` is the canonical registry and
-`routes.yaml` selects task and touchpoint contracts. The bootstrap loads the kernel, project context,
-activated rules, one workflow, risk gates, and verification requirements.
-The public catalog contains 39 distinct operational entrypoints, including a
-frontend-first track for design, interaction, accessibility, performance,
-experience review, and browser verification. The frontend track also carries
-progressively disclosed visual-quality, browser-protocol, and React/Next
-performance references synthesized from the strongest local systems.
+LES has two layers:
 
-The CLI can stage a pinned, collision-safe copy under `.les-agents`:
+1. `.les-agents/` contains the pinned LES payload: policies, skills, profiles,
+   adapters, templates, and its manifest.
+2. A provider pointer tells one AI CLI to read the adapter from `.les-agents/`.
+
+The installer is repo-local. It does not write to `~/.agents`, `~/.codex`,
+`~/.claude`, `~/.gemini`, or any other global agent directory.
+
+### Install
+
+Run this from the project root:
 
 ~~~sh
 npx -y github:hakienit/les
+~~~
+
+The short command is equivalent to `les add --scope repo --root .les-agents`.
+It creates:
+
+~~~text
+.les-agents/
+├── adapters/
+├── policies/
+├── profiles/
+├── skills/
+├── templates/
+├── tools/
+├── les-manifest.json
+└── les-manifest.yaml
+~~~
+
+The install is collision-safe. An existing `.les-agents/` or project-owned
+manifest stops the command instead of overwriting files.
+
+To preview the install:
+
+~~~sh
+npx -y github:hakienit/les add --scope repo --root .les-agents --dry-run
+~~~
+
+To pin an exact Git tag:
+
+~~~sh
+npx -y github:hakienit/les#v0.1.0
+~~~
+
+### Enable routing
+
+Install does not modify provider entrypoints. Enable only the CLI you want:
+
+~~~sh
 npx -y github:hakienit/les on codex
+npx -y github:hakienit/les on claude-code
+npx -y github:hakienit/les on gemini-cli
+npx -y github:hakienit/les on antigravity
+~~~
+
+The repo-local pointer locations are:
+
+| Provider | Pointer |
+| --- | --- |
+| Codex | `AGENTS.md` |
+| Claude Code | `CLAUDE.md` |
+| Gemini CLI | `GEMINI.md` |
+| Antigravity | `.agents/agents/les/agent.md` |
+
+Each pointer routes the provider to the matching adapter under
+`.les-agents/adapters/`. LES never overwrites an existing project-owned pointer.
+If a pointer already exists, review the suggested pointer and add it manually.
+
+### Disable routing
+
+Disable one provider:
+
+~~~sh
 npx -y github:hakienit/les off codex
 ~~~
 
-The default install is repo-local and never touches global agent directories.
-`on` and `off` manage provider pointers without overwriting project-owned files;
-omit the provider to toggle all configured providers. The old `adapter` command
-remains an alias for `on`.
+Disable all providers currently enabled:
+
+~~~sh
+npx -y github:hakienit/les off
+~~~
+
+`off` removes only an unchanged pointer created by LES. It leaves
+`.les-agents/` installed, so routing can be restored later:
+
+~~~sh
+npx -y github:hakienit/les on
+~~~
+
+The no-provider form toggles all providers previously configured with `on
+<provider>`. On a fresh install, use the provider form once first.
+
+### Maintain an installation
+
+~~~sh
+# Show managed differences
+npx -y github:hakienit/les diff
+
+# Check installation and provider status
+npx -y github:hakienit/les doctor
+
+# Update the payload; project-owned files are preserved
+npx -y github:hakienit/les update
+
+# Preview an update
+npx -y github:hakienit/les update --dry-run
+~~~
+
+`update` creates a sibling backup and refuses to proceed when unmanaged files
+are present inside `.les-agents/`. Restore a backup with:
+
+~~~sh
+npx -y github:hakienit/les rollback --backup <backup-path>
+~~~
+
+The older `adapter <provider>` command remains an alias for `on <provider>`.
+
+### Custom repo-local root
+
+`.les-agents` is the default. A different relative directory can be selected:
+
+~~~sh
+npx -y github:hakienit/les add --root .team-les
+npx -y github:hakienit/les on codex --root .team-les
+~~~
+
+The root must stay inside the current repository; absolute paths and `..` are
+rejected.
+
+### Direct LES usage
+
+Without installing the CLI, an agent can start at `skills/bootstrap/SKILL.md`.
+`inventory.yaml` is the canonical registry and `routes.yaml` selects task and
+touchpoint contracts. The bootstrap loads the kernel, project context,
+activated rules, one workflow, risk gates, and verification requirements.
+The public catalog contains 39 operational entrypoints, including frontend
+design, interaction, accessibility, performance, experience review, and browser
+verification.
 
 ## Local gates
 
