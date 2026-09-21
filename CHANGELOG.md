@@ -2,6 +2,9 @@
 
 ## 1.0.0 - 2026-09-21
 
+- Install LES once in user-local `~/.les-agents`; repositories keep only `LES-AGENT.md` and provider pointers.
+- Add `les init`, user-local routing state, and collision-safe native CLI shims.
+- Add cached daily update notices through `les doctor`.
 - Keep repo-local `.les-agents/` Markdown-only and gitignored; run the CLI from
   the pinned package instead of copying LES source code into the repository.
 - Add repo-local `.les-agents` installation with `on`/`off` routing controls.

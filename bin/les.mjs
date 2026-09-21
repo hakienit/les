@@ -10,7 +10,13 @@ import { spawnSync } from "node:child_process";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageMetadata = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 const manifestFilename = "les-manifest.md";
+const agentFilename = "LES-AGENT.md";
 const legacyManagedFiles = new Set(["les-manifest.json", "les-manifest.yaml", "activate.sh"]);
+const packageFiles = [...new Set([...(packageMetadata.files || []), "package.json"])].filter((path) => path !== "package-lock.json");
+
+function userRoot() {
+  return process.env.LES_HOME || join(homedir(), ".les-agents");
+}
 
 function isAgentPayloadFile(path) {
   return path.endsWith(".md") && (
@@ -22,25 +28,26 @@ function isAgentPayloadFile(path) {
 }
 
 function usage() {
-  console.log(`LES repo-local CLI
+  console.log(`LES user-local CLI
 
 Usage:
-  les                         install the default repo payload
-  les init                    verify the local installation and show next steps
-  les active <provider>       register and enable a provider
-  les on [provider]           enable one or all registered providers
+  les                         install or update ~/.les-agents
+  les init                    create LES-AGENT.md in the current repo
+  les active <provider>       enable a provider pointer in this repo
+  les on [provider]           enable one or all configured providers
   les off [provider]          disable one or all providers
-  les doctor                  show installation and routing status
-  les diff                    show managed payload differences
-  les update                  refresh the payload from this CLI source
-  les rollback --backup PATH  restore a prior update backup
+  les doctor                  show install, routing, and update status
+  les add --scope repo        legacy: copy Markdown payload into a repo
+  les update --scope repo     legacy: update a repo-local payload
+  les diff --scope repo       legacy: show repo-local payload differences
+  les rollback --backup PATH  legacy: restore a prior repo update backup
 
 Providers: codex, claude-code, gemini-cli, antigravity
-Options: --root PATH, --scope repo|global, --dry-run
+Options: --root PATH, --scope repo|user|global, --dry-run
 
 Install from GitHub:
-  npx -y github:hakienit/les#v${packageMetadata.version}
-  npx -y github:hakienit/les#v${packageMetadata.version} active codex`);
+  npx -y github:hakienit/les
+  export PATH="$HOME/.les-agents/bin:$PATH"`);
 }
 
 function parseArgs(argv) {
@@ -75,26 +82,23 @@ function parseArgs(argv) {
       throw new Error("Unknown option: " + value);
     }
   }
-  if (!["add", "init", "update", "rollback", "doctor", "diff", "adapter", "active", "on", "off"].includes(command)) {
+  if (!["install", "add", "init", "update", "rollback", "doctor", "diff", "adapter", "active", "on", "off"].includes(command)) {
     usage();
-    throw new Error("Choose add, init, update, rollback, doctor, diff, active, on, off, or adapter.");
+    throw new Error("Choose install, init, active, on, off, doctor, or a legacy add/update command.");
   }
-  if (!["repo", "global"].includes(options.scope)) {
-    throw new Error("--scope must be repo or global.");
+  if (!["repo", "user", "global"].includes(options.scope)) throw new Error("--scope must be repo, user, or global.");
+  if (["init", "active", "on", "off"].includes(command) && options.scope !== "repo") {
+    throw new Error(command + " is repo-local; omit --scope or use --scope repo.");
   }
   if (["adapter", "active"].includes(command) && !provider) {
     throw new Error(command + " requires codex, claude-code, gemini-cli, or antigravity.");
-  }
-  if (["on", "off"].includes(command) && options.scope !== "repo") {
-    throw new Error("on/off are repo-local; use --scope repo.");
   }
   return { command, options, provider };
 }
 
 function targetFor(scope, root = ".les-agents") {
-  if (scope === "global") {
-    return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "les");
-  }
+  if (scope === "user") return userRoot();
+  if (scope === "global") return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "les");
   if (!root || root.startsWith("/") || root.split(/[\\/]/).includes("..")) {
     throw new Error("--root must be a relative repo path without ..");
   }
@@ -110,30 +114,32 @@ function providerEntryFor(provider, scope) {
     "gemini-cli": ["GEMINI.md", join(home, ".gemini", "GEMINI.md")],
     antigravity: [join(".agents", "agents", "les", "agent.md"), join(home, ".gemini", "config", "agents", "les", "agent.md")]
   };
-  if (!entries[provider]) {
-    throw new Error("Unknown provider: " + provider);
-  }
+  if (!entries[provider]) throw new Error("Unknown provider: " + provider);
   return scope === "repo" ? join(root, entries[provider][0]) : entries[provider][1];
 }
 
-function adapterSourceFor(target, provider) {
-  const filename = provider === "codex" ? "AGENTS.md" : provider === "claude-code" ? "CLAUDE.md" : provider === "gemini-cli" ? "GEMINI.md" : "agent.md";
-  return join(target, "adapters", provider, filename);
+function adapterFilename(provider) {
+  return provider === "codex" ? "AGENTS.md" : provider === "claude-code" ? "CLAUDE.md" : provider === "gemini-cli" ? "GEMINI.md" : "agent.md";
 }
 
-function adapterSourcePath(target, provider) {
-  return "./" + relative(process.cwd(), adapterSourceFor(target, provider)).split(sep).join("/");
+function adapterSourceFor(root, provider) {
+  return join(root, "adapters", provider, adapterFilename(provider));
 }
 
 function adapterPointer(provider, source) {
-  const priority = "For this repository, .les-agents is the LES source of truth. Prefer this local adapter, policy, and skill payload over global LES copies.\n\n";
-  if (provider === "codex") {
-    return "# LES adapter\n\n" + priority + "Read and follow the pinned LES adapter at " + source + " before starting work.\n";
-  }
   if (provider === "antigravity") {
-    return "---\nname: les\ndescription: Route work through the pinned Living Engineering System.\n---\n\n" + priority + "Read and follow the pinned LES adapter at " + source + " before starting work.\n";
+    return "---\nname: les\ndescription: Route work through the user-local Living Engineering System.\n---\n\n@" + source + "\n";
   }
-  return "# LES adapter\n\n" + priority + "@" + source + "\n";
+  return "# LES\n\n@" + source + "\n";
+}
+
+function localAgentPath() {
+  return join(process.cwd(), agentFilename);
+}
+
+function localPointerSource(entry) {
+  const path = relative(dirname(entry), localAgentPath()).split(sep).join("/");
+  return path.startsWith(".") ? path : "./" + path;
 }
 
 async function exists(path) {
@@ -150,11 +156,8 @@ async function filesBelow(root, prefix = "") {
   const files = [];
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
     const relativePath = prefix ? join(prefix, entry.name) : entry.name;
-    if (entry.isDirectory()) {
-      files.push(...await filesBelow(join(root, entry.name), relativePath));
-    } else {
-      files.push(relativePath);
-    }
+    if (entry.isDirectory()) files.push(...await filesBelow(join(root, entry.name), relativePath));
+    else files.push(relativePath);
   }
   return files;
 }
@@ -170,20 +173,28 @@ async function sourceFiles(root = packageRoot) {
     if (!await exists(sourcePath)) continue;
     for (const relativePath of await filesBelow(sourcePath)) {
       const path = join(directory, relativePath).split(sep).join("/");
-      if (isAgentPayloadFile(path)) {
-        files.set(path, join(sourcePath, relativePath));
-      }
+      if (isAgentPayloadFile(path)) files.set(path, join(sourcePath, relativePath));
     }
   }
   return files;
 }
 
-async function copyPayload(stage) {
-  for (const [destination, sourcePath] of await sourceFiles(packageRoot)) {
+async function copyPayload(stage, root = packageRoot) {
+  for (const [destination, sourcePath] of await sourceFiles(root)) {
     const target = join(stage, destination);
     await mkdir(dirname(target), { recursive: true });
     await cp(sourcePath, target);
   }
+}
+
+async function copyDistribution(stage, root = packageRoot) {
+  for (const path of packageFiles) {
+    const source = join(root, path);
+    if (await exists(source)) await cp(source, join(stage, path), { recursive: true });
+  }
+  const launcher = join(stage, "bin", "les");
+  await mkdir(dirname(launcher), { recursive: true });
+  await writeFile(launcher, "#!/bin/sh\nexec node \"$(dirname \"$0\")/les.mjs\" \"$@\"\n", { mode: 0o755 });
 }
 
 function manifestSource(manifest) {
@@ -222,9 +233,7 @@ async function readManifest(target) {
   const currentPath = join(target, manifestFilename);
   const legacyPath = join(target, "les-manifest.json");
   const manifestPath = await exists(currentPath) ? currentPath : legacyPath;
-  if (!await exists(manifestPath)) {
-    throw new Error("No LES manifest at " + target + ". Run les add first.");
-  }
+  if (!await exists(manifestPath)) throw new Error("No LES manifest at " + target + ". Run the LES installer first.");
   const manifest = parseManifest(await readFile(manifestPath, "utf8"));
   if (manifest.packageName !== packageMetadata.name || !Array.isArray(manifest.managed)) {
     throw new Error("The existing manifest is not a compatible LES installation.");
@@ -236,7 +245,7 @@ async function unmanagedFiles(target, manifest) {
   const known = new Set(manifest.managed.map((entry) => entry.path));
   known.add(manifestFilename);
   for (const path of legacyManagedFiles) known.add(path);
-  return (await filesBelow(target)).filter((relativePath) => !known.has(relativePath));
+  return (await filesBelow(target)).filter((path) => !known.has(path));
 }
 
 async function changesFor(target) {
@@ -246,50 +255,31 @@ async function changesFor(target) {
   const changes = [];
   for (const [relativePath, sourcePath] of source) {
     const installedPath = join(target, relativePath);
-    if (!installed.has(relativePath)) {
-      changes.push("missing " + relativePath);
-    } else if (await sha256(sourcePath) !== await sha256(installedPath)) {
-      changes.push("changed " + relativePath);
-    }
+    if (!installed.has(relativePath)) changes.push("missing " + relativePath);
+    else if (await sha256(sourcePath) !== await sha256(installedPath)) changes.push("changed " + relativePath);
     installed.delete(relativePath);
   }
-  for (const relativePath of installed) {
-    changes.push("removed " + relativePath);
-  }
-  for (const relativePath of await unmanagedFiles(target, manifest)) {
-    changes.push("unmanaged " + relativePath);
-  }
+  for (const relativePath of installed) changes.push("removed " + relativePath);
+  for (const relativePath of await unmanagedFiles(target, manifest)) changes.push("unmanaged " + relativePath);
   return changes.sort();
 }
 
 async function buildStage(target, scope, adapters, configuredAdapters, sourceRoot = packageRoot, metadata = packageMetadata) {
   await mkdir(dirname(target), { recursive: true });
   const stage = await mkdtemp(join(dirname(target), "." + basename(target) + ".staging-"));
-  if (sourceRoot === packageRoot) {
-    await copyPayload(stage);
-  } else {
-    for (const [destination, sourcePath] of await sourceFiles(sourceRoot)) {
-      const targetPath = join(stage, destination);
-      await mkdir(dirname(targetPath), { recursive: true });
-      await cp(sourcePath, targetPath);
-    }
-  }
+  await copyPayload(stage, sourceRoot);
   await createManifest(stage, scope, adapters, configuredAdapters, metadata);
   return stage;
 }
 
-function backupPath(target) {
-  return join(dirname(target), "." + basename(target) + ".backup-" + Date.now());
-}
-
-async function install(target, scope, replace, adapters = [], configuredAdapters = adapters) {
+async function installRepo(target, scope, replace, adapters = [], configuredAdapters = adapters) {
   const stage = await buildStage(target, scope, adapters, configuredAdapters);
   let backup;
   let backupStage;
   let displaced;
   try {
     if (replace) {
-      backup = backupPath(target);
+      backup = join(dirname(target), "." + basename(target) + ".backup-" + Date.now());
       const previousManifest = await readManifest(target);
       backupStage = await buildStage(backup, scope, previousManifest.adapters || [], previousManifest.configuredAdapters || previousManifest.adapters || [], target, {
         name: previousManifest.packageName,
@@ -304,25 +294,40 @@ async function install(target, scope, replace, adapters = [], configuredAdapters
     if (displaced) await rm(displaced, { recursive: true, force: true });
     return backup;
   } catch (error) {
-    if (displaced && !await exists(target) && await exists(displaced)) {
-      await rename(displaced, target);
-    }
+    if (displaced && !await exists(target) && await exists(displaced)) await rename(displaced, target);
     throw error;
   } finally {
-    if (await exists(stage)) {
-      await rm(stage, { recursive: true, force: true });
+    if (await exists(stage)) await rm(stage, { recursive: true, force: true });
+    if (backupStage && await exists(backupStage)) await rm(backupStage, { recursive: true, force: true });
+  }
+}
+
+async function installUser(target, replace) {
+  await mkdir(dirname(target), { recursive: true });
+  if (await exists(target) && !replace) throw new Error("Collision at " + target + ". Run the installer again to update LES.");
+  if (await exists(target) && (await filesBelow(target)).length) await readManifest(target);
+  const stage = await mkdtemp(join(dirname(target), "." + basename(target) + ".staging-"));
+  await copyDistribution(stage);
+  await createManifest(stage, "user");
+  let displaced;
+  try {
+    if (await exists(target)) {
+      displaced = join(dirname(target), "." + basename(target) + ".displaced-" + Date.now());
+      await rename(target, displaced);
     }
-    if (backupStage && await exists(backupStage)) {
-      await rm(backupStage, { recursive: true, force: true });
-    }
+    await rename(stage, target);
+    if (displaced) await rm(displaced, { recursive: true, force: true });
+  } catch (error) {
+    if (displaced && !await exists(target) && await exists(displaced)) await rename(displaced, target);
+    throw error;
+  } finally {
+    if (await exists(stage)) await rm(stage, { recursive: true, force: true });
   }
 }
 
 function printPlan(action, target, changes = []) {
   console.log(action.toUpperCase() + " " + target);
-  for (const change of changes) {
-    console.log("  " + change);
-  }
+  for (const change of changes) console.log("  " + change);
 }
 
 function repoIgnoreEntry(target) {
@@ -349,38 +354,92 @@ async function ensureRepoIgnore(target) {
 }
 
 async function add(target, options) {
-  if (await exists(target)) {
-    throw new Error("Collision at " + target + ". Use les update only for an existing LES installation.");
-  }
-  const changes = ["write Markdown-only LES files pinned to " + packageMetadata.version];
-  if (options.scope === "repo" && await needsRepoIgnore(target)) {
-    changes.push("add " + repoIgnoreEntry(target) + " to .gitignore");
-  }
-  printPlan("add", target, changes);
-  if (options.dryRun) {
+  if (options.scope === "user") {
+    printPlan("install", target, ["copy the LES CLI and source into the user-local store"]);
+    if (!options.dryRun) {
+      await installUser(target, true);
+      console.log("Installed " + packageMetadata.name + "@" + packageMetadata.version + " in " + target + ".");
+    }
     return;
   }
+  if (await exists(target)) throw new Error("Collision at " + target + ". Use les update only for an existing LES installation.");
+  const changes = ["write Markdown-only LES files pinned to " + packageMetadata.version];
+  if (options.scope === "repo" && await needsRepoIgnore(target)) changes.push("add " + repoIgnoreEntry(target) + " to .gitignore");
+  printPlan("add", target, changes);
+  if (options.dryRun) return;
   if (options.scope === "repo") await ensureRepoIgnore(target);
-  await install(target, options.scope, false);
+  await installRepo(target, options.scope, false);
   console.log("Installed " + packageMetadata.name + "@" + packageMetadata.version + ".");
-  if (options.scope === "repo") console.log("Next: npx -y github:hakienit/les#v" + packageMetadata.version + " active <provider>");
 }
 
-async function init(target, options) {
-  await readManifest(target);
-  if (options.dryRun) {
-    printPlan("init", target, ["use the pinned package through npx; no local launcher is copied"]);
-    return;
-  }
-  console.log("LES is already repo-local. Run: npx -y github:hakienit/les#v" + packageMetadata.version + " active <provider>");
+function initialState() {
+  return { configuredProviders: [], activeProviders: [] };
+}
+
+function agentDocument(state) {
+  const providers = [
+    "codex: ~/.les-agents/adapters/codex/AGENTS.md",
+    "claude-code: ~/.les-agents/adapters/claude-code/CLAUDE.md",
+    "gemini-cli: ~/.les-agents/adapters/gemini-cli/GEMINI.md",
+    "antigravity: ~/.les-agents/adapters/antigravity/agent.md"
+  ];
+  return "# LES\n\n" +
+    "This repository uses the user-local LES installation at `~/.les-agents`.\n" +
+    "Use that installation as the only LES source for this repository.\n\n" +
+    "Read the adapter matching the current AI CLI:\n" +
+    providers.map((provider) => "- " + provider).join("\n") + "\n\n" +
+    "Then read `~/.les-agents/skills/bootstrap/SKILL.md` before starting work.\n\n" +
+    "<!-- LES-MANAGED\n" + JSON.stringify(state, null, 2) + "\n-->\n";
+}
+
+function parseAgentState(source) {
+  const body = source.match(/<!-- LES-MANAGED\n([\s\S]*?)\n-->/u)?.[1];
+  if (!body) throw new Error("Collision at " + localAgentPath() + ". Existing LES-AGENT.md is not LES-managed.");
+  const state = JSON.parse(body);
+  if (!Array.isArray(state.configuredProviders) || !Array.isArray(state.activeProviders)) throw new Error("LES-AGENT.md has invalid LES state.");
+  return state;
+}
+
+async function readAgentState() {
+  const path = localAgentPath();
+  if (!await exists(path)) throw new Error("No " + agentFilename + " in this repo. Run les init first.");
+  return parseAgentState(await readFile(path, "utf8"));
+}
+
+async function writeAgentState(state) {
+  await writeFile(localAgentPath(), agentDocument(state));
+}
+
+async function requireUserStore() {
+  const root = userRoot();
+  await readManifest(root);
+  return root;
+}
+
+async function init(options) {
+  await requireUserStore();
+  const path = localAgentPath();
+  const state = await exists(path) ? parseAgentState(await readFile(path, "utf8")) : initialState();
+  printPlan("init", path, ["point the repository to ~/.les-agents", "store provider routing in LES-AGENT.md"]);
+  if (options.dryRun) return;
+  if (!await exists(path)) await writeAgentState(state);
+  console.log("Initialized LES for this repository.");
+  console.log("Next: les active <provider>");
 }
 
 async function update(target, options) {
+  if (options.scope === "user") {
+    await requireUserStore();
+    printPlan("update", target, ["refresh the user-local LES CLI and source"]);
+    if (!options.dryRun) {
+      await installUser(target, true);
+      console.log("Updated LES to " + packageMetadata.version + ".");
+    }
+    return;
+  }
   const manifest = await readManifest(target);
   const unmanaged = await unmanagedFiles(target, manifest);
-  if (unmanaged.length) {
-    throw new Error("Collision: unmanaged files exist in the LES root: " + unmanaged.join(", "));
-  }
+  if (unmanaged.length) throw new Error("Collision: unmanaged files exist in the LES root: " + unmanaged.join(", "));
   const changes = await changesFor(target);
   const ignoreNeeded = options.scope === "repo" && await needsRepoIgnore(target);
   if (!changes.length && manifest.packageVersion === packageMetadata.version && !ignoreNeeded) {
@@ -390,19 +449,15 @@ async function update(target, options) {
   const plan = changes.length ? changes : ["refresh manifest to " + packageMetadata.version];
   if (ignoreNeeded) plan.push("add " + repoIgnoreEntry(target) + " to .gitignore");
   printPlan("update", target, plan);
-  if (options.dryRun) {
-    return;
-  }
+  if (options.dryRun) return;
   if (ignoreNeeded) await ensureRepoIgnore(target);
   // ponytail: no cross-process lock; add one only if concurrent installs become supported.
-  const backup = await install(target, options.scope, true, manifest.adapters || [], manifest.configuredAdapters || manifest.adapters || []);
+  const backup = await installRepo(target, options.scope, true, manifest.adapters || [], manifest.configuredAdapters || manifest.adapters || []);
   console.log("Updated to " + packageMetadata.version + ". Backup: " + backup);
 }
 
 async function rollback(target, options) {
-  if (!options.backup) {
-    throw new Error("Rollback requires --backup <path> from a prior update.");
-  }
+  if (!options.backup) throw new Error("Rollback requires --backup <path> from a prior update.");
   const backup = resolve(options.backup);
   const targetParent = resolve(dirname(target));
   if (dirname(backup) !== targetParent || !basename(backup).startsWith("." + basename(target) + ".backup-")) {
@@ -411,9 +466,7 @@ async function rollback(target, options) {
   await readManifest(target);
   await readManifest(backup);
   printPlan("rollback", target, ["restore " + backup]);
-  if (options.dryRun) {
-    return;
-  }
+  if (options.dryRun) return;
   const displaced = join(targetParent, "." + basename(target) + ".rollback-" + Date.now());
   await rename(target, displaced);
   try {
@@ -425,50 +478,40 @@ async function rollback(target, options) {
   console.log("Rolled back. Displaced installation: " + displaced);
 }
 
-async function setAdapter(target, provider, options, enabled) {
-  if (!await exists(join(target, manifestFilename)) && await exists(join(target, "les-manifest.json"))) {
-    await update(target, options);
-  }
-  const manifest = await readManifest(target);
-  const source = adapterSourceFor(target, provider);
-  if (!await exists(source)) {
-    throw new Error("Adapter source is missing: " + source);
-  }
-  const entry = providerEntryFor(provider, options.scope);
-  const pointer = adapterPointer(provider, adapterSourcePath(target, provider));
+async function setAdapter(provider, options, enabled) {
+  const root = await requireUserStore();
+  const state = await readAgentState();
+  const source = adapterSourceFor(root, provider);
+  if (!await exists(source)) throw new Error("Adapter source is missing: " + source);
+  const entry = providerEntryFor(provider, "repo");
+  const pointer = adapterPointer(provider, localPointerSource(entry));
   const current = await exists(entry) ? await readFile(entry, "utf8") : undefined;
   if (enabled) {
-    if (current !== undefined && current !== pointer) {
-      throw new Error("Collision at " + entry + ". Add this pointer manually:\n" + pointer);
-    }
-    printPlan("on " + provider, entry, ["route work through " + source]);
+    if (current !== undefined && current !== pointer) throw new Error("Collision at " + entry + ". Add this pointer manually:\n" + pointer);
+    printPlan("on " + provider, entry, ["route work through " + agentFilename + " to " + source]);
     if (options.dryRun) return;
     if (current === undefined) {
       await mkdir(dirname(entry), { recursive: true });
       await writeFile(entry, pointer);
     }
-    manifest.adapters = [...new Set([...(manifest.adapters || []), provider])].sort();
-    manifest.configuredAdapters = [...new Set([...(manifest.configuredAdapters || []), provider])].sort();
+    state.configuredProviders = [...new Set([...state.configuredProviders, provider])].sort();
+    state.activeProviders = [...new Set([...state.activeProviders, provider])].sort();
   } else {
-    if (current !== undefined && current !== pointer) {
-      throw new Error("Cannot turn off " + provider + ": " + entry + " is not a LES-managed pointer.");
-    }
-    printPlan("off " + provider, entry, ["stop routing through " + source]);
+    if (current !== undefined && current !== pointer) throw new Error("Cannot turn off " + provider + ": " + entry + " is not a LES-managed pointer.");
+    printPlan("off " + provider, entry, ["stop routing through " + agentFilename]);
     if (options.dryRun) return;
     if (current !== undefined) await rm(entry);
-    manifest.adapters = (manifest.adapters || []).filter((name) => name !== provider);
+    state.activeProviders = state.activeProviders.filter((name) => name !== provider);
   }
-  await writeManifest(target, manifest);
+  await writeAgentState(state);
   console.log((enabled ? "Enabled " : "Disabled ") + provider + " routing.");
 }
 
-async function setAllAdapters(target, options, enabled) {
-  const manifest = await readManifest(target);
-  const providers = enabled ? (manifest.configuredAdapters || manifest.adapters || []) : (manifest.adapters || []);
-  if (!providers.length) {
-    throw new Error("No configured provider. Use les on <provider> first.");
-  }
-  for (const provider of providers) await setAdapter(target, provider, options, enabled);
+async function setAllAdapters(options, enabled) {
+  const state = await readAgentState();
+  const providers = enabled ? state.configuredProviders : state.activeProviders;
+  if (!providers.length) throw new Error("No configured provider. Use les active <provider> first.");
+  for (const provider of providers) await setAdapter(provider, options, enabled);
 }
 
 async function diff(target) {
@@ -477,9 +520,7 @@ async function diff(target) {
     console.log("No managed differences.");
     return 0;
   }
-  for (const change of changes) {
-    console.log(change);
-  }
+  for (const change of changes) console.log(change);
   return 1;
 }
 
@@ -487,9 +528,7 @@ async function nearestExisting(path) {
   let current = path;
   while (!await exists(current)) {
     const parent = dirname(current);
-    if (parent === current) {
-      return current;
-    }
+    if (parent === current) return current;
     current = parent;
   }
   return current;
@@ -500,25 +539,82 @@ function doctorLine(status, name, detail) {
   return status;
 }
 
-async function doctor(target) {
+function versionParts(version) {
+  const match = String(version).match(/^(\d+)\.(\d+)\.(\d+)/u);
+  return match ? match.slice(1).map(Number) : undefined;
+}
+
+function isNewer(candidate, installed) {
+  const next = versionParts(candidate);
+  const current = versionParts(installed);
+  if (!next || !current) return false;
+  for (let index = 0; index < next.length; index += 1) {
+    if (next[index] !== current[index]) return next[index] > current[index];
+  }
+  return false;
+}
+
+function updateCachePath() {
+  return join(process.env.LES_CACHE_HOME || process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), "les", "update-check.json");
+}
+
+async function latestVersion() {
+  if (process.env.LES_UPDATE_CHECK === "0") return undefined;
+  if (process.env.LES_LATEST_VERSION) return process.env.LES_LATEST_VERSION;
+  const cache = updateCachePath();
+  if (await exists(cache)) {
+    try {
+      const cached = JSON.parse(await readFile(cache, "utf8"));
+      if (Date.now() - cached.checkedAt < 86_400_000) return cached.latestVersion;
+    } catch { /* refresh a broken cache */ }
+  }
+  const response = await fetch("https://github.com/hakienit/les/raw/refs/heads/main/package.json", {
+    signal: AbortSignal.timeout(3000),
+    headers: { accept: "application/json" }
+  });
+  if (!response.ok) throw new Error("HTTP " + response.status);
+  const latest = (await response.json()).version;
+  if (!versionParts(latest)) throw new Error("remote package version is invalid");
+  await mkdir(dirname(cache), { recursive: true });
+  await writeFile(cache, JSON.stringify({ checkedAt: Date.now(), latestVersion: latest }) + "\n");
+  return latest;
+}
+
+async function doctor() {
+  const root = userRoot();
   const statuses = [];
-  statuses.push(doctorLine(await exists(join(packageRoot, "policies", "README.md")) ? "READY" : "BLOCKED", "les-policies", "canonical policy kernel"));
-  statuses.push(doctorLine(await exists(join(packageRoot, "inventory.yaml")) ? "READY" : "BLOCKED", "inventory", "public contract inventory"));
+  let manifest;
+  try {
+    manifest = await readManifest(root);
+    statuses.push(doctorLine("READY", "installation", "LES " + manifest.packageVersion + " at " + root));
+  } catch {
+    statuses.push(doctorLine("PENDING_USER_ACTION", "installation", "run npx -y github:hakienit/les"));
+  }
+  statuses.push(doctorLine(await exists(join(root, "policies", "README.md")) ? "READY" : "BLOCKED", "les-policies", "canonical policy kernel"));
+  statuses.push(doctorLine(await exists(join(root, "inventory.yaml")) ? "READY" : "BLOCKED", "inventory", "public contract inventory"));
   statuses.push(doctorLine(Number(process.versions.node.split(".")[0]) >= 20 ? "READY" : "BLOCKED", "node", process.version + " (requires >=20)"));
   try {
-    await access(await nearestExisting(dirname(target)), constants.W_OK);
-    statuses.push(doctorLine("READY", "filesystem", "target parent is writable"));
+    await access(await nearestExisting(dirname(root)), constants.W_OK);
+    statuses.push(doctorLine("READY", "filesystem", "user store parent is writable"));
   } catch {
-    statuses.push(doctorLine("PENDING_USER_ACTION", "filesystem", "grant write permission for " + dirname(target)));
+    statuses.push(doctorLine("PENDING_USER_ACTION", "filesystem", "grant write permission for " + dirname(root)));
+  }
+  const agent = localAgentPath();
+  if (await exists(agent)) {
+    try {
+      const state = await readAgentState();
+      statuses.push(doctorLine("READY", "repository", "LES-AGENT.md; active: " + (state.activeProviders.join(", ") || "none")));
+    } catch {
+      statuses.push(doctorLine("BLOCKED", "repository", "LES-AGENT.md is not LES-managed"));
+    }
+  } else {
+    statuses.push(doctorLine("PENDING_USER_ACTION", "repository", "run les init"));
   }
   statuses.push(doctorLine(spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0 ? "READY" : "FALLBACK", "git", "recommended project tool"));
-  statuses.push(doctorLine("SKIPPED", "browser-automation", "optional capability is not selected"));
-  statuses.push(doctorLine("SKIPPED", "project-tracker-connector", "optional capability is not selected"));
-  statuses.push(doctorLine(await exists(join(target, manifestFilename)) || await exists(join(target, "les-manifest.json")) ? "READY" : "PENDING_USER_ACTION", "installation", "run les add when no manifest exists"));
   if (process.env.LES_PROVIDER) {
     const provider = process.env.LES_PROVIDER;
     const command = { codex: "codex", "claude-code": "claude", "gemini-cli": "gemini", antigravity: "antigravity" }[provider];
-    if (!command || !await exists(adapterSourceFor(target, provider))) {
+    if (!command || !await exists(adapterSourceFor(root, provider))) {
       statuses.push(doctorLine("PENDING_USER_ACTION", "provider-adapter", provider + " has no compatible LES adapter"));
     } else if (spawnSync(command, ["--version"], { stdio: "ignore" }).status !== 0) {
       statuses.push(doctorLine("PENDING_USER_ACTION", "provider-adapter", provider + " CLI is unavailable; host smoke evidence is pending"));
@@ -526,12 +622,20 @@ async function doctor(target) {
       statuses.push(doctorLine("PENDING_USER_ACTION", "provider-adapter", provider + " requires instruction-loading and permission smoke-test evidence"));
     }
   }
-  if (statuses.includes("BLOCKED")) {
-    return 2;
+  if (manifest) {
+    try {
+      const latest = await latestVersion();
+      if (latest && isNewer(latest, manifest.packageVersion)) {
+        statuses.push(doctorLine("UPDATE_AVAILABLE", "les", manifest.packageVersion + " -> " + latest + "; run npx -y github:hakienit/les"));
+      } else if (latest) {
+        statuses.push(doctorLine("READY", "update-check", "LES is current (" + manifest.packageVersion + ")"));
+      }
+    } catch {
+      statuses.push(doctorLine("SKIPPED", "update-check", "remote version unavailable; retry later"));
+    }
   }
-  if (statuses.includes("PENDING_USER_ACTION")) {
-    return 1;
-  }
+  if (statuses.includes("BLOCKED")) return 2;
+  if (statuses.includes("PENDING_USER_ACTION")) return 1;
   return 0;
 }
 
@@ -545,24 +649,32 @@ try {
     usage();
     process.exit(0);
   }
-  const { command, options, provider } = parseArgs(argv.length ? argv : ["add"]);
+  const { command, options, provider } = parseArgs(argv.length ? argv : ["install", "--scope", "user"]);
   const target = targetFor(options.scope, options.root);
-  if (command === "add") {
+  if (command === "install") {
+    if (options.scope === "repo") throw new Error("install is user-local; omit --scope or use --scope user.");
+    printPlan("install", target, ["copy the LES CLI and source into the user-local store"]);
+    if (!options.dryRun) {
+      await installUser(target, true);
+      console.log("Installed " + packageMetadata.name + "@" + packageMetadata.version + " in " + target + ".");
+      console.log("Add to PATH once: export PATH=\"$HOME/.les-agents/bin:$PATH\"");
+    }
+  } else if (command === "add") {
     await add(target, options);
+  } else if (command === "init") {
+    await init(options);
   } else if (command === "update") {
     await update(target, options);
   } else if (command === "rollback") {
     await rollback(target, options);
   } else if (command === "diff") {
     process.exitCode = await diff(target);
-  } else if (command === "init") {
-    await init(target, options);
   } else if (command === "adapter" || command === "active" || (command === "on" && provider) || (command === "off" && provider)) {
-    await setAdapter(target, provider, options, command !== "off");
+    await setAdapter(provider, options, command !== "off");
   } else if (command === "on" || command === "off") {
-    await setAllAdapters(target, options, command === "on");
+    await setAllAdapters(options, command === "on");
   } else {
-    process.exitCode = await doctor(target);
+    process.exitCode = await doctor();
   }
 } catch (error) {
   console.error("[BLOCKED] " + error.message);
