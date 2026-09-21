@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2 - 2026-09-21
+
+- Fix `les doctor` missing newly published npm updates while a current-version cache entry is still fresh.
+
 ## 1.0.1 - 2026-09-21
 
 - Add `les-ui-preview-gate` for Figma/wireframe preview selection before frontend implementation.

@@ -72,8 +72,10 @@ npx -y @hakienit/les
 les doctor
 ~~~
 
-`les doctor` checks the installed version and, at most once per day, compares it
-with the current GitHub package version. When a newer version exists it prints:
+`les doctor` checks the installed version against the current npm package
+version. Known update results are cached for at most one day; a cache that only
+contains the installed version is rechecked so a newly published version is
+not hidden. When a newer version exists it prints:
 
 ~~~text
 [UPDATE_AVAILABLE] les: 1.0.0 -> 1.0.1; run npx -y @hakienit/les

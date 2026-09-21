@@ -558,14 +558,14 @@ function updateCachePath() {
   return join(process.env.LES_CACHE_HOME || process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), "les", "update-check.json");
 }
 
-async function latestVersion() {
+async function latestVersion(installed) {
   if (process.env.LES_UPDATE_CHECK === "0") return undefined;
   if (process.env.LES_LATEST_VERSION) return process.env.LES_LATEST_VERSION;
   const cache = updateCachePath();
   if (await exists(cache)) {
     try {
       const cached = JSON.parse(await readFile(cache, "utf8"));
-      if (Date.now() - cached.checkedAt < 86_400_000) return cached.latestVersion;
+      if (Date.now() - cached.checkedAt < 86_400_000 && isNewer(cached.latestVersion, installed)) return cached.latestVersion;
     } catch { /* refresh a broken cache */ }
   }
   const response = await fetch("https://registry.npmjs.org/@hakienit/les/latest", {
@@ -624,7 +624,7 @@ async function doctor() {
   }
   if (manifest) {
     try {
-      const latest = await latestVersion();
+      const latest = await latestVersion(manifest.packageVersion);
       if (latest && isNewer(latest, manifest.packageVersion)) {
         statuses.push(doctorLine("UPDATE_AVAILABLE", "les", manifest.packageVersion + " -> " + latest + "; run npx -y @hakienit/les"));
       } else if (latest) {

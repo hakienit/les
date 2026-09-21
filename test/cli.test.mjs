@@ -59,6 +59,16 @@ test("user install, repo init, routing, and cached update notice work without re
     assert.equal(run(["init"], project, env).status, 0);
     assert.equal(run(["doctor"], project, { ...env, LES_UPDATE_CHECK: "1", LES_LATEST_VERSION: "9.9.9" }).status, 0);
     assert.match(run(["doctor"], project, { ...env, LES_UPDATE_CHECK: "1", LES_LATEST_VERSION: "9.9.9" }).stdout, /UPDATE_AVAILABLE.*les/);
+    await writeFile(join(home, "les-manifest.md"), (await readFile(join(home, "les-manifest.md"), "utf8")).replace(`"packageVersion": "${packageMetadata.version}"`, '"packageVersion": "1.0.0"'));
+    await mkdir(join(cache, "les"), { recursive: true });
+    await writeFile(join(cache, "les", "update-check.json"), JSON.stringify({ checkedAt: Date.now(), latestVersion: "1.0.0" }) + "\n");
+    const registryMock = "data:text/javascript," + encodeURIComponent("globalThis.fetch = async () => new Response(JSON.stringify({ version: '1.0.1' }), { status: 200, headers: { 'content-type': 'application/json' } });");
+    const staleCacheCheck = spawnSync(process.execPath, ["--import", registryMock, cli, "doctor"], {
+      cwd: project,
+      encoding: "utf8",
+      env: { ...env, LES_UPDATE_CHECK: "1" }
+    });
+    assert.match(staleCacheCheck.stdout, /UPDATE_AVAILABLE.*1\.0\.0 -> 1\.0\.1/);
     assert.ok((await filesBelow(project)).every((path) => path.endsWith(".md")));
   } finally {
     await rm(project, { recursive: true, force: true });
