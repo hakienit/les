@@ -1,0 +1,43 @@
+name: Publish npm package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Verify and publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Check release version
+        run: test "${GITHUB_REF_NAME#v}" = "$(node -p \"require('./package.json').version\")"
+
+      - name: Run tests
+        run: npm test
+
+      - name: Verify behavior scenarios
+        run: npm run eval:behavior:dry
+
+      - name: Verify inventory
+        run: npm run verify-inventory
+
+      - name: Verify release boundary
+        run: npm run verify-release
+
+      - name: Publish with npm Trusted Publishing
+        run: npm publish --access public
