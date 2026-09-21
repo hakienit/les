@@ -45,8 +45,8 @@ Usage:
 Providers: codex, claude-code, gemini-cli, antigravity
 Options: --root PATH, --scope repo|user|global, --dry-run
 
-Install from GitHub:
-  npx -y github:hakienit/les
+Install from npm:
+  npx -y @hakienit/les
   export PATH="$HOME/.les-agents/bin:$PATH"`);
 }
 
@@ -568,7 +568,7 @@ async function latestVersion() {
       if (Date.now() - cached.checkedAt < 86_400_000) return cached.latestVersion;
     } catch { /* refresh a broken cache */ }
   }
-  const response = await fetch("https://github.com/hakienit/les/raw/refs/heads/main/package.json", {
+  const response = await fetch("https://registry.npmjs.org/@hakienit/les/latest", {
     signal: AbortSignal.timeout(3000),
     headers: { accept: "application/json" }
   });
@@ -588,7 +588,7 @@ async function doctor() {
     manifest = await readManifest(root);
     statuses.push(doctorLine("READY", "installation", "LES " + manifest.packageVersion + " at " + root));
   } catch {
-    statuses.push(doctorLine("PENDING_USER_ACTION", "installation", "run npx -y github:hakienit/les"));
+    statuses.push(doctorLine("PENDING_USER_ACTION", "installation", "run npx -y @hakienit/les"));
   }
   statuses.push(doctorLine(await exists(join(root, "policies", "README.md")) ? "READY" : "BLOCKED", "les-policies", "canonical policy kernel"));
   statuses.push(doctorLine(await exists(join(root, "inventory.yaml")) ? "READY" : "BLOCKED", "inventory", "public contract inventory"));
@@ -626,7 +626,7 @@ async function doctor() {
     try {
       const latest = await latestVersion();
       if (latest && isNewer(latest, manifest.packageVersion)) {
-        statuses.push(doctorLine("UPDATE_AVAILABLE", "les", manifest.packageVersion + " -> " + latest + "; run npx -y github:hakienit/les"));
+        statuses.push(doctorLine("UPDATE_AVAILABLE", "les", manifest.packageVersion + " -> " + latest + "; run npx -y @hakienit/les"));
       } else if (latest) {
         statuses.push(doctorLine("READY", "update-check", "LES is current (" + manifest.packageVersion + ")"));
       }

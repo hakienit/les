@@ -122,7 +122,7 @@ const generated = spawnSync(process.execPath, [join(root, "bin/generate-adapter-
 if (generated.status !== 0) fail("generated manifest drift\n" + generated.stderr.trim());
 
 const forbiddenFields = ["prove" + "nance", "source" + "Revision", "source" + "Repository"];
-const forbidden = new RegExp("\\b(?:" + forbiddenFields.join("|") + ")\\b|https?:\\/\\/(?!github\\.com\\/hakienit\\/les)", "iu");
+const forbidden = new RegExp("\\b(?:" + forbiddenFields.join("|") + ")\\b|https?:\\/\\/(?!github\\.com\\/hakienit\\/les|registry\\.npmjs\\.org\\/@hakienit\\/les)", "iu");
 for (const path of declared) {
   if (path === "LICENSE") continue;
   const source = await readFile(join(root, path), "utf8");

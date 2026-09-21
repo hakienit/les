@@ -9,7 +9,7 @@ add optional domain rules, and adapters route hosts to the same bootstrap.
 Run from any directory:
 
 ~~~sh
-npx -y github:hakienit/les
+npx -y @hakienit/les
 export PATH="$HOME/.les-agents/bin:$PATH"
 ~~~
 
@@ -68,7 +68,7 @@ repository points to the stable user store, so updating that store updates all
 repositories:
 
 ~~~sh
-npx -y github:hakienit/les
+npx -y @hakienit/les
 les doctor
 ~~~
 
@@ -76,7 +76,7 @@ les doctor
 with the current GitHub package version. When a newer version exists it prints:
 
 ~~~text
-[UPDATE_AVAILABLE] les: 1.0.0 -> 1.0.1; run npx -y github:hakienit/les
+[UPDATE_AVAILABLE] les: 1.0.0 -> 1.0.1; run npx -y @hakienit/les
 ~~~
 
 The check is informational and never updates automatically. If `les` is never

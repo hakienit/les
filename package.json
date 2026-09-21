@@ -4,6 +4,9 @@
   "description": "Living Engineering System distribution and installer",
   "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "les": "bin/les.mjs"
   },
