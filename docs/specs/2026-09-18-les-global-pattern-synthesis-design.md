@@ -87,21 +87,21 @@ Every skill is a real directory directly beneath `skills/`:
 ~~~text
 skills/
   README.md
-  bootstrap/SKILL.md
-  discovery/SKILL.md
-  planning/SKILL.md
-  technical-research/SKILL.md
-  domain-modeling/SKILL.md
+  les-bootstrap/SKILL.md
+  les-discovery/SKILL.md
+  les-planning/SKILL.md
+  les-technical-research/SKILL.md
+  les-domain-modeling/SKILL.md
   ...
-  frontend/SKILL.md
-  frontend-design/SKILL.md
-  accessibility-review/SKILL.md
-  frontend-verification/SKILL.md
+  les-frontend/SKILL.md
+  les-frontend-design/SKILL.md
+  les-accessibility-review/SKILL.md
+  les-frontend-verification/SKILL.md
 ~~~
 
-Category directories and skill symlinks are invalid. Folder names use concise
-capability names; frontmatter retains the canonical `les-*` identity. Profile
-membership is metadata, not physical nesting.
+Category directories and skill symlinks are invalid. Folder names use the
+canonical `les-*` identity. Profile membership is metadata, not physical
+nesting.
 
 `profiles/frontend/` keeps activation and rule files only. All frontend skills
 live in the common skill root and declare `profile: frontend`.

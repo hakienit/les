@@ -11,7 +11,7 @@ parallel specialist skills or changing provider activation behavior.
 
 ## Ordered changes
 
-1. Add `skills/ui-preview-gate/SKILL.md` with model invocation, frontend
+1. Add `skills/les-ui-preview-gate/SKILL.md` with model invocation, frontend
    profile, Figma/wireframe trigger, preview/feedback/selection procedure,
    design-system reuse guard, gallery metadata, and terminal evidence.
 2. Add `les-ui-preview-gate` to `inventory.yaml` and add its `frontend-preview`
@@ -29,7 +29,7 @@ parallel specialist skills or changing provider activation behavior.
 
 ## Owned paths
 
-- Skill: `skills/ui-preview-gate/SKILL.md`
+- Skill: `skills/les-ui-preview-gate/SKILL.md`
 - Routing/catalog: `routes.yaml`, `inventory.yaml`, `skills/README.md`
 - Evidence: `test/fixtures/route-cases.json`,
   `test/fixtures/skill-cases.json`, `test/fixtures/host-scenarios.json`,

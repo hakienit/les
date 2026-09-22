@@ -1,1 +1,1 @@
-{"adapterVersion":1,"provider":"claude-code","skillRoot":"skills","bootstrap":"skills/bootstrap/SKILL.md","entrypoint":"adapters/claude-code/CLAUDE.md"}
+{"adapterVersion":1,"provider":"claude-code","skillRoot":"skills","bootstrap":"skills/les-bootstrap/SKILL.md","entrypoint":"adapters/claude-code/CLAUDE.md"}

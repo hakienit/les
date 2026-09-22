@@ -79,6 +79,11 @@ npx -y @hakienit/les
 les doctor
 ~~~
 
+Repositories initialized before the `les-*` skill-path migration may still
+point to the old bootstrap path. After an update, follow the printed notice and
+change their `LES-AGENT.md` pointer to
+`~/.les-agents/skills/les-bootstrap/SKILL.md`.
+
 `les doctor` checks the installed version against the current npm package
 version. Known update results are cached for at most one day; a cache that only
 contains the installed version is rechecked so a newly published version is

@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "provider": "claude-code",
   "skillRoot": "skills",
-  "bootstrap": "skills/bootstrap/SKILL.md",
+  "bootstrap": "skills/les-bootstrap/SKILL.md",
   "promotedSkills": [
     "les-bootstrap",
     "les-discovery",

@@ -241,7 +241,7 @@ These establish the behavior contract used to review later waves.
 
 ### Bootstrap inheritance
 
-Every non-bootstrap skill declares `skills/bootstrap/SKILL.md` in resolved
+Every non-bootstrap skill declares `skills/les-bootstrap/SKILL.md` in resolved
 metadata. The validator rejects prose-only bootstrap references.
 
 ### Gate per wave

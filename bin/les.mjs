@@ -399,14 +399,15 @@ async function installRepo(target, scope, replace, adapters = [], configuredAdap
 
 async function installUser(target, replace) {
   await mkdir(dirname(target), { recursive: true });
-  if (await exists(target) && !replace) throw new Error("Collision at " + target + ". Run the installer again to update LES.");
-  if (await exists(target) && (await filesBelow(target)).length) await readManifest(target);
+  const existingInstall = await exists(target);
+  if (existingInstall && !replace) throw new Error("Collision at " + target + ". Run the installer again to update LES.");
+  if (existingInstall && (await filesBelow(target)).length) await readManifest(target);
   const stage = await mkdtemp(join(dirname(target), "." + basename(target) + ".staging-"));
   await copyDistribution(stage);
   await createManifest(stage, "user");
   let displaced;
   try {
-    if (await exists(target)) {
+    if (existingInstall) {
       displaced = join(dirname(target), "." + basename(target) + ".displaced-" + Date.now());
       await rename(target, displaced);
     }
@@ -419,6 +420,9 @@ async function installUser(target, replace) {
     if (await exists(stage)) await rm(stage, { recursive: true, force: true });
   }
   await configureCommandPath(target);
+  if (existingInstall) {
+    console.log("NOTICE: LES skill paths now use `skills/les-*`. Update existing repositories' LES-AGENT.md pointers to `~/.les-agents/skills/les-bootstrap/SKILL.md`.");
+  }
 }
 
 function printPlan(action, target, changes = []) {
@@ -484,7 +488,7 @@ function agentDocument(state) {
     "Use that installation as the only LES source for this repository.\n\n" +
     "Read the adapter matching the current AI CLI:\n" +
     providers.map((provider) => "- " + provider).join("\n") + "\n\n" +
-    "Then read `~/.les-agents/skills/bootstrap/SKILL.md` before starting work.\n\n" +
+    "Then read `~/.les-agents/skills/les-bootstrap/SKILL.md` before starting work.\n\n" +
     "<!-- LES-MANAGED\n" + JSON.stringify(state, null, 2) + "\n-->\n";
 }
 

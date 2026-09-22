@@ -20,7 +20,7 @@ test("operational catalog has deterministic routes and bootstrap inheritance", a
   for (const skill of inventory.skills) {
     assert.ok(["stable", "experimental"].includes(skill.maturity));
     assert.match(skill.path, /^skills\/[^/]+\/SKILL\.md$/u);
-    if (skill.name !== "les-bootstrap") assert.equal(skill.bootstrap, "skills/bootstrap/SKILL.md");
+    if (skill.name !== "les-bootstrap") assert.equal(skill.bootstrap, "skills/les-bootstrap/SKILL.md");
   }
 });
 

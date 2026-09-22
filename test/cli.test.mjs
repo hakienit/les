@@ -69,7 +69,16 @@ test("user install, repo init, routing, and cached update notice work without re
     }
     assert.equal(await access(join(project, ".les-agents")).then(() => true).catch(() => false), false);
 
-    assert.equal(run([], project, env).status, 0);
+    const refreshed = run([], project, env);
+    assert.equal(refreshed.status, 0, refreshed.stderr);
+    assert.match(refreshed.stdout, /NOTICE: LES skill paths now use `skills\/les-\*`/);
+    await mkdir(join(home, "skills", "bootstrap"), { recursive: true });
+    await writeFile(join(home, "skills", "bootstrap", "SKILL.md"), "legacy\n");
+    const updated = run([], project, env);
+    assert.equal(updated.status, 0, updated.stderr);
+    assert.match(updated.stdout, /NOTICE: LES skill paths now use `skills\/les-\*`/);
+    assert.ok(await access(join(home, "skills", "les-bootstrap", "SKILL.md")).then(() => true).catch(() => false));
+    assert.equal(await access(join(home, "skills", "bootstrap")).then(() => true).catch(() => false), false);
     if (process.platform !== "win32") {
       assert.equal((await readFile(join(shellHome, ".zshrc"), "utf8")).match(/LES user-local CLI/g).length, 1);
     }
@@ -258,7 +267,7 @@ test("every adapter declares the canonical bootstrap and skill root", async () =
   for (const provider of ["codex", "claude-code", "gemini-cli", "antigravity"]) {
     const manifest = JSON.parse(await readFile(join(root, "adapters", provider, "adapter.json"), "utf8"));
     assert.equal(manifest.skillRoot, "skills");
-    assert.equal(manifest.bootstrap, "skills/bootstrap/SKILL.md");
+    assert.equal(manifest.bootstrap, "skills/les-bootstrap/SKILL.md");
   }
 });
 

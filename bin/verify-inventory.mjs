@@ -64,7 +64,7 @@ for (const skill of inventory.skills || []) {
   if (fields.name !== skill.name || fields.invocation !== skill.invocation || fields.maturity !== skill.maturity || fields.route !== skill.route || fields.profile !== skill.profile) fail(skill.path + " metadata differs from inventory");
   if (descriptions.has(fields.description)) fail("duplicate skill trigger: " + skill.path);
   descriptions.add(fields.description);
-  if (skill.name !== "les-bootstrap" && (skill.bootstrap !== "skills/bootstrap/SKILL.md" || fields.bootstrap !== skill.bootstrap)) fail(skill.path + " lacks resolved bootstrap metadata");
+  if (skill.name !== "les-bootstrap" && (skill.bootstrap !== "skills/les-bootstrap/SKILL.md" || fields.bootstrap !== skill.bootstrap)) fail(skill.path + " lacks resolved bootstrap metadata");
   try {
     const dependencies = JSON.parse(fields.loads);
     const workflows = new Set();
@@ -109,7 +109,7 @@ for (const status of ["COMPLETE", "BLOCKED", "PENDING_USER_ACTION", "FAILED", "S
 for (const provider of providers) {
   const adapter = JSON.parse(await readFile(join(root, "adapters", provider, "adapter.json"), "utf8"));
   const manifest = JSON.parse(await readFile(join(root, "adapters", provider, "manifest.json"), "utf8"));
-  if (adapter.provider !== provider || adapter.skillRoot !== "skills" || adapter.bootstrap !== "skills/bootstrap/SKILL.md") fail("invalid adapter contract: " + provider);
+  if (adapter.provider !== provider || adapter.skillRoot !== "skills" || adapter.bootstrap !== "skills/les-bootstrap/SKILL.md") fail("invalid adapter contract: " + provider);
   if (Object.hasOwn(manifest, "profileSkillRoots")) fail("adapter manifest declares a profile-specific skill root: " + provider);
   if (manifest.provider !== provider || !["PENDING_HOST_SMOKE", "READY"].includes(manifest.readiness) || !manifest.promotedSkills.includes("les-bootstrap")) fail("invalid host manifest: " + provider);
   if (manifest.readiness === "READY" && (provider !== "codex" || manifest.smokeModel !== "gpt-5.6-luna/medium" || Object.values(manifest.smokeTests || {}).some((status) => status !== "passed"))) fail("ready host manifest lacks complete Codex smoke evidence: " + provider);

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2 - 2026-09-22
+
+- Prefix skill directories with `les-` to keep LES paths distinct from other agent skill catalogs.
+- Notify users after updating an existing install that repositories must refresh their `LES-AGENT.md` skill pointer.
+
 ## 1.1.1 - 2026-09-22
 
 - Persist the user-local `les` command in common shell profiles and Windows User PATH during installation.

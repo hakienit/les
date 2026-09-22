@@ -16,7 +16,7 @@ const manifest = (provider) => JSON.stringify({
   manifestVersion: 1,
   provider,
   skillRoot: "skills",
-  bootstrap: "skills/bootstrap/SKILL.md",
+  bootstrap: "skills/les-bootstrap/SKILL.md",
   promotedSkills,
   modelInvokedSkills: inventory.skills.filter((skill) => skill.invocation === "model" && skill.maturity === "stable").map((skill) => skill.name),
   userInvokedSkills: inventory.skills.filter((skill) => skill.invocation === "user" && skill.maturity === "stable").map((skill) => skill.name),
