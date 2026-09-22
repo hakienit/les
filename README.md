@@ -10,13 +10,13 @@ Run from any directory:
 
 ~~~sh
 npx -y @hakienit/les
-export PATH="$HOME/.les-agents/bin:$PATH"
 ~~~
 
-The installer stores the CLI and LES source in `~/.les-agents`. Add the `PATH`
-line to the shell profile if the `les` command should persist across terminals.
-It does not write to `~/.agents`, `~/.codex`, `~/.claude`, `~/.gemini`, or any
-other provider directory.
+The installer stores the CLI and LES source in `~/.les-agents` and persists its
+`bin` directory in the user PATH. On macOS and Linux it updates common shell
+profiles; on Windows it updates the user PATH and installs a `les.cmd` shim.
+Open a new terminal after the first install. It does not write to `~/.agents`,
+`~/.codex`, `~/.claude`, `~/.gemini`, or any other provider directory.
 
 The user store intentionally contains the package source. Repositories never
 receive that source tree.

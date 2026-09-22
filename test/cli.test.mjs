@@ -39,15 +39,40 @@ async function readManifest(path) {
 test("user install, repo init, routing, and cached update notice work without repo source", async () => {
   const project = await mkdtemp(join(tmpdir(), "les-cli-user-"));
   const home = await mkdtemp(join(tmpdir(), "les-cli-home-"));
+  const shellHome = await mkdtemp(join(tmpdir(), "les-cli-shell-home-"));
   const cache = await mkdtemp(join(tmpdir(), "les-cli-cache-"));
   try {
-    const env = { LES_HOME: home, LES_CACHE_HOME: cache, CODEX_HOME: join(project, "outside-codex") };
+    const env = {
+      LES_HOME: home,
+      HOME: shellHome,
+      LES_CACHE_HOME: cache,
+      CODEX_HOME: join(project, "outside-codex"),
+      ...(process.platform === "win32" ? { LES_DISABLE_PATH_SETUP: "1" } : {})
+    };
     const installed = run([], project, env);
     assert.equal(installed.status, 0, installed.stderr);
     assert.equal((await readManifest(join(home, "les-manifest.md"))).scope, "user");
     assert.equal((await readManifest(join(home, "les-manifest.md"))).packageVersion, packageMetadata.version);
     assert.ok(await access(join(home, "bin", "les.mjs")).then(() => true).catch(() => false));
+    assert.ok(await access(join(home, "bin", "les.cmd")).then(() => true).catch(() => false));
+    if (process.platform !== "win32") {
+      const profile = await readFile(join(shellHome, ".zshrc"), "utf8");
+      assert.match(profile, /LES user-local CLI/);
+      assert.match(profile, new RegExp(home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      const shell = spawnSync("sh", ["-c", ". \"$HOME/.profile\" && command -v les"], {
+        cwd: project,
+        encoding: "utf8",
+        env: { ...process.env, ...env, PATH: "/usr/bin:/bin" }
+      });
+      assert.equal(shell.status, 0, shell.stderr);
+      assert.equal(shell.stdout.trim(), join(home, "bin", "les"));
+    }
     assert.equal(await access(join(project, ".les-agents")).then(() => true).catch(() => false), false);
+
+    assert.equal(run([], project, env).status, 0);
+    if (process.platform !== "win32") {
+      assert.equal((await readFile(join(shellHome, ".zshrc"), "utf8")).match(/LES user-local CLI/g).length, 1);
+    }
 
     assert.equal(run(["init"], project, env).status, 0);
     assert.match(await readFile(join(project, "LES-AGENT.md"), "utf8"), /~\/\.les-agents/);
@@ -74,6 +99,7 @@ test("user install, repo init, routing, and cached update notice work without re
   } finally {
     await rm(project, { recursive: true, force: true });
     await rm(home, { recursive: true, force: true });
+    await rm(shellHome, { recursive: true, force: true });
     await rm(cache, { recursive: true, force: true });
   }
 });

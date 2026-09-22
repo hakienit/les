@@ -55,7 +55,9 @@ Options: --root PATH, --scope repo|user|global, --dry-run
 
 Install from npm:
   npx -y @hakienit/les
-  export PATH="$HOME/.les-agents/bin:$PATH"`);
+
+The installer persists the LES command in the user PATH. Open a new terminal
+after the first install.`);
 }
 
 function parseArgs(argv) {
@@ -203,6 +205,91 @@ async function copyDistribution(stage, root = packageRoot) {
   const launcher = join(stage, "bin", "les");
   await mkdir(dirname(launcher), { recursive: true });
   await writeFile(launcher, "#!/bin/sh\nexec node \"$(dirname \"$0\")/les.mjs\" \"$@\"\n", { mode: 0o755 });
+  await writeFile(join(stage, "bin", "les.cmd"), "@echo off\r\nnode \"%~dp0les.mjs\" %*\r\n", { mode: 0o755 });
+}
+
+function shellQuote(value) {
+  return "'" + value.replaceAll("'", "'\\''") + "'";
+}
+
+function shellPathExpression(target) {
+  const defaultRoot = resolve(join(homedir(), ".les-agents"));
+  return resolve(target) === defaultRoot
+    ? '"$HOME/.les-agents/bin"'
+    : shellQuote(resolve(join(target, "bin")));
+}
+
+function posixPathSnippet(target) {
+  const path = shellPathExpression(target);
+  return "# LES user-local CLI\ncase \":$PATH:\" in *:" + path + ":*) ;; *) export PATH=" + path + ":$PATH;; esac";
+}
+
+function fishPathSnippet(target) {
+  return "# LES user-local CLI\nfish_add_path " + shellPathExpression(target);
+}
+
+async function appendPathSnippet(path, snippet) {
+  const current = await exists(path) ? await readFile(path, "utf8") : "";
+  if (current.includes("# LES user-local CLI") || current.includes(".les-agents/bin")) return false;
+  await mkdir(dirname(path), { recursive: true });
+  const prefix = current && !current.endsWith("\n") ? current + "\n" : current;
+  await writeFile(path, prefix + snippet + "\n");
+  return true;
+}
+
+async function configurePosixPath(target) {
+  const home = homedir();
+  const profiles = [
+    join(home, ".profile"),
+    join(home, ".bash_profile"),
+    join(home, ".bashrc"),
+    join(home, ".zprofile"),
+    join(home, ".zshrc"),
+    join(home, ".config", "fish", "config.fish")
+  ];
+  const changed = [];
+  const failed = [];
+  for (const path of profiles) {
+    try {
+      if (await appendPathSnippet(path, path.endsWith("config.fish") ? fishPathSnippet(target) : posixPathSnippet(target))) changed.push(path);
+    } catch (error) {
+      failed.push(path + ": " + error.message);
+    }
+  }
+  if (changed.length) console.log("Added LES to PATH in " + changed.join(", ") + ". Open a new terminal to use `les`.");
+  if (failed.length) console.error("[WARN] Could not persist LES PATH in " + failed.join("; ") + ".");
+}
+
+async function configureWindowsPath(target) {
+  const bin = resolve(join(target, "bin"));
+  const script = "$entry = [System.IO.Path]::GetFullPath($env:LES_BIN_PATH)\n" +
+    "$current = [Environment]::GetEnvironmentVariable('Path', 'User')\n" +
+    "$parts = @()\n" +
+    "if ($current) { $parts = @($current -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }\n" +
+    "if ($parts | Where-Object { $_.TrimEnd('\\') -ieq $entry.TrimEnd('\\') }) { Write-Output 'exists'; exit 0 }\n" +
+    "[Environment]::SetEnvironmentVariable('Path', (($parts + $entry) -join ';'), 'User')\n" +
+    "Write-Output 'added'";
+  const result = spawnSync("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
+    encoding: "utf8",
+    env: { ...process.env, LES_BIN_PATH: bin }
+  });
+  if (result.status !== 0) {
+    throw new Error(result.error?.message || result.stderr?.trim() || "PowerShell could not update the user PATH.");
+  }
+  if (result.stdout.trim() === "added") console.log("Added " + bin + " to the Windows user PATH. Open a new terminal to use `les`.");
+}
+
+async function configureCommandPath(target) {
+  if (process.env.LES_DISABLE_PATH_SETUP === "1") return;
+  try {
+    if (process.platform === "win32") await configureWindowsPath(target);
+    else await configurePosixPath(target);
+  } catch (error) {
+    const detail = process.platform === "win32"
+      ? "Add " + resolve(join(target, "bin")) + " to the Windows user PATH manually."
+      : "Add `export PATH=\"$HOME/.les-agents/bin:$PATH\"` to your shell profile manually.";
+    console.error("[WARN] Could not persist LES PATH: " + error.message + " " + detail);
+  }
 }
 
 function manifestSource(manifest) {
@@ -331,6 +418,7 @@ async function installUser(target, replace) {
   } finally {
     if (await exists(stage)) await rm(stage, { recursive: true, force: true });
   }
+  await configureCommandPath(target);
 }
 
 function printPlan(action, target, changes = []) {
@@ -815,7 +903,6 @@ try {
     if (!options.dryRun) {
       await installUser(target, true);
       console.log("Installed " + packageMetadata.name + "@" + packageMetadata.version + " in " + target + ".");
-      console.log("Add to PATH once: export PATH=\"$HOME/.les-agents/bin:$PATH\"");
     }
   } else if (command === "add") {
     await add(target, options);

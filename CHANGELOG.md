@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 - 2026-09-22
+
+- Persist the user-local `les` command in common shell profiles and Windows User PATH during installation.
+- Add a Windows `les.cmd` launcher for terminals that do not execute extensionless shell scripts.
+
 ## 1.1.0 - 2026-09-21
 
 - Add interactive `les connect` multi-provider discovery with `Select all` and default-on selection.
