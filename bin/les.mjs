@@ -230,8 +230,18 @@ function fishPathSnippet(target) {
 
 async function appendPathSnippet(path, snippet) {
   const current = await exists(path) ? await readFile(path, "utf8") : "";
-  if (current.includes("# LES user-local CLI") || current.includes(".les-agents/bin")) return false;
   await mkdir(dirname(path), { recursive: true });
+  const marker = "# LES user-local CLI";
+  const markerIndex = current.indexOf(marker);
+  if (markerIndex >= 0) {
+    const lineEnd = current.indexOf("\n", markerIndex);
+    const blockEnd = lineEnd < 0 ? current.length : current.indexOf("\n", lineEnd + 1);
+    const replacement = current.slice(0, markerIndex) + snippet + current.slice(blockEnd < 0 ? current.length : blockEnd);
+    if (replacement === current) return false;
+    await writeFile(path, replacement);
+    return true;
+  }
+  if (current.includes(".les-agents/bin")) return false;
   const prefix = current && !current.endsWith("\n") ? current + "\n" : current;
   await writeFile(path, prefix + snippet + "\n");
   return true;

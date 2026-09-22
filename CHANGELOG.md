@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.3 - 2026-09-22
+
+- Repair stale LES PATH snippets when reinstalling the user-local CLI.
+
 ## 1.1.2 - 2026-09-22
 
 - Prefix skill directories with `les-` to keep LES paths distinct from other agent skill catalogs.

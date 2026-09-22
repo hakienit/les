@@ -113,6 +113,29 @@ test("user install, repo init, routing, and cached update notice work without re
   }
 });
 
+test("user install repairs a stale LES PATH snippet", async () => {
+  if (process.platform === "win32") return;
+  const project = await mkdtemp(join(tmpdir(), "les-cli-path-project-"));
+  const home = await mkdtemp(join(tmpdir(), "les-cli-path-home-"));
+  const shellHome = await mkdtemp(join(tmpdir(), "les-cli-path-shell-home-"));
+  const staleBin = join(tmpdir(), "les-cli-stale-bin");
+  try {
+    const env = { LES_HOME: home, HOME: shellHome, LES_UPDATE_CHECK: "0" };
+    assert.equal(run([], project, env).status, 0);
+    await writeFile(join(shellHome, ".zshrc"), `# LES user-local CLI\nexport PATH='${staleBin}:$PATH'\n`);
+
+    assert.equal(run([], project, env).status, 0);
+
+    const profile = await readFile(join(shellHome, ".zshrc"), "utf8");
+    assert.match(profile, new RegExp(home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.doesNotMatch(profile, new RegExp(staleBin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  } finally {
+    await rm(project, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+    await rm(shellHome, { recursive: true, force: true });
+  }
+});
+
 test("active preserves a project-owned provider entrypoint", async () => {
   const project = await mkdtemp(join(tmpdir(), "les-cli-adapter-"));
   const home = await mkdtemp(join(tmpdir(), "les-cli-adapter-home-"));
