@@ -1,9 +1,10 @@
 # Changelog
 
-## 1.1.4 - 2026-09-22
+## 1.1.4 - 2026-09-25
 
 - Persist the user-local `les` command in `ZDOTDIR` and PowerShell profiles,
   alongside the existing POSIX and Windows PATH setup.
+- Define task-scoped session closeability in the LES workflow contract.
 
 ## 1.1.3 - 2026-09-22
 
