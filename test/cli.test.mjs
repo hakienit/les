@@ -40,11 +40,21 @@ test("user install, repo init, routing, and cached update notice work without re
   const project = await mkdtemp(join(tmpdir(), "les-cli-user-"));
   const home = await mkdtemp(join(tmpdir(), "les-cli-home-"));
   const shellHome = await mkdtemp(join(tmpdir(), "les-cli-shell-home-"));
+  const zshHome = await mkdtemp(join(tmpdir(), "les-cli-zsh-home-"));
+  const powerShellBin = await mkdtemp(join(tmpdir(), "les-cli-powershell-bin-"));
+  const powerShellProfile = join(shellHome, "Microsoft.PowerShell_profile.ps1");
   const cache = await mkdtemp(join(tmpdir(), "les-cli-cache-"));
   try {
+    if (process.platform !== "win32") {
+      await writeFile(join(powerShellBin, "pwsh"), "#!/bin/sh\nprintf '%s\\n' \"$POWERSHELL_PROFILE\"\n");
+      await chmod(join(powerShellBin, "pwsh"), 0o755);
+    }
     const env = {
       LES_HOME: home,
       HOME: shellHome,
+      ZDOTDIR: zshHome,
+      POWERSHELL_PROFILE: powerShellProfile,
+      ...(process.platform !== "win32" ? { PATH: powerShellBin + ":/usr/bin:/bin" } : {}),
       LES_CACHE_HOME: cache,
       CODEX_HOME: join(project, "outside-codex"),
       ...(process.platform === "win32" ? { LES_DISABLE_PATH_SETUP: "1" } : {})
@@ -56,7 +66,7 @@ test("user install, repo init, routing, and cached update notice work without re
     assert.ok(await access(join(home, "bin", "les.mjs")).then(() => true).catch(() => false));
     assert.ok(await access(join(home, "bin", "les.cmd")).then(() => true).catch(() => false));
     if (process.platform !== "win32") {
-      const profile = await readFile(join(shellHome, ".zshrc"), "utf8");
+      const profile = await readFile(join(zshHome, ".zshrc"), "utf8");
       assert.match(profile, /LES user-local CLI/);
       assert.match(profile, new RegExp(home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
       const shell = spawnSync("sh", ["-c", ". \"$HOME/.profile\" && command -v les"], {
@@ -66,6 +76,18 @@ test("user install, repo init, routing, and cached update notice work without re
       });
       assert.equal(shell.status, 0, shell.stderr);
       assert.equal(shell.stdout.trim(), join(home, "bin", "les"));
+      const zsh = spawnSync("zsh", ["-lic", "command -v les"], {
+        cwd: project,
+        encoding: "utf8",
+        env: { ...process.env, ...env, PATH: "/usr/bin:/bin" }
+      });
+      if (!zsh.error || zsh.error.code !== "ENOENT") {
+        assert.equal(zsh.status, 0, zsh.stderr);
+        assert.equal(zsh.stdout.trim(), join(home, "bin", "les"));
+      }
+      const powerShellProfileSource = await readFile(powerShellProfile, "utf8");
+      assert.match(powerShellProfileSource, /\$env:Path/);
+      assert.match(powerShellProfileSource, new RegExp(home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
     assert.equal(await access(join(project, ".les-agents")).then(() => true).catch(() => false), false);
 
@@ -80,7 +102,7 @@ test("user install, repo init, routing, and cached update notice work without re
     assert.ok(await access(join(home, "skills", "les-bootstrap", "SKILL.md")).then(() => true).catch(() => false));
     assert.equal(await access(join(home, "skills", "bootstrap")).then(() => true).catch(() => false), false);
     if (process.platform !== "win32") {
-      assert.equal((await readFile(join(shellHome, ".zshrc"), "utf8")).match(/LES user-local CLI/g).length, 1);
+      assert.equal((await readFile(join(zshHome, ".zshrc"), "utf8")).match(/LES user-local CLI/g).length, 1);
     }
 
     assert.equal(run(["init"], project, env).status, 0);
@@ -109,6 +131,8 @@ test("user install, repo init, routing, and cached update notice work without re
     await rm(project, { recursive: true, force: true });
     await rm(home, { recursive: true, force: true });
     await rm(shellHome, { recursive: true, force: true });
+    await rm(zshHome, { recursive: true, force: true });
+    await rm(powerShellBin, { recursive: true, force: true });
     await rm(cache, { recursive: true, force: true });
   }
 });

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.4 - 2026-09-22
+
+- Persist the user-local `les` command in `ZDOTDIR` and PowerShell profiles,
+  alongside the existing POSIX and Windows PATH setup.
+
 ## 1.1.3 - 2026-09-22
 
 - Repair stale LES PATH snippets when reinstalling the user-local CLI.

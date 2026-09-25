@@ -13,10 +13,13 @@ npx -y @hakienit/les
 ~~~
 
 The installer stores the CLI and LES source in `~/.les-agents` and persists its
-`bin` directory in the user PATH. On macOS and Linux it updates common shell
-profiles; on Windows it updates the user PATH and installs a `les.cmd` shim.
-Open a new terminal after the first install. It does not write to `~/.agents`,
-`~/.codex`, `~/.claude`, `~/.gemini`, or any other provider directory.
+`bin` directory in the user PATH. On macOS and Linux it updates common POSIX,
+fish, zsh (`ZDOTDIR` included), and PowerShell profiles; on Windows it updates
+the user PATH, the PowerShell profile, and installs a `les.cmd` shim. Open a
+new terminal after the first install. The terminal that ran `npx` must run
+`source ~/.zshrc` (or its shell equivalent) once because a child process cannot
+change its parent shell's PATH. It does not write to `~/.agents`, `~/.codex`,
+`~/.claude`, `~/.gemini`, or any other provider directory.
 
 The user store intentionally contains the package source. Repositories never
 receive that source tree.

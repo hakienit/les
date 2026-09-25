@@ -36,6 +36,18 @@ test("lifecycle, workflow, adapter, and profile contracts expose truthful stops"
   assert.ok(profile.positiveTriggers.length && profile.negativeTriggers.length);
 });
 
+test("task output exposes truthful session closeability", async () => {
+  const [contracts, bootstrap] = await Promise.all([
+    readFile(resolve(root, "policies/workflow-contracts.md"), "utf8"),
+    readFile(resolve(root, "skills/les-bootstrap/SKILL.md"), "utf8")
+  ]);
+  assert.match(contracts, /only `COMPLETE` is `CLOSEABLE`/u);
+  assert.match(contracts, /every\s+other status is `KEEP_OPEN`/u);
+  assert.match(contracts, /Omit the footer for ordinary conversation/u);
+  assert.match(bootstrap, /closeability footer defined in/u);
+  assert.match(bootstrap, /\.\.\/\.\.\/policies\/workflow-contracts\.md/u);
+});
+
 test("frontend profile covers the full evidence track", async () => {
   const [inventory, routes, profile, ...rules] = await Promise.all([
     readJson("inventory.yaml"),

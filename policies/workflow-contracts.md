@@ -10,6 +10,18 @@ The execution record starts with objective, scope, repository identity, selected
 route, risk, active profile, and acceptance. It ends with evidence, residual risk,
 terminal status, and the next safe action.
 
+Task-scoped responses end with a compact closeability footer:
+
+```text
+LES status: COMPLETE
+Session: CLOSEABLE
+Next safe action: none
+```
+
+Derive `Session` from the terminal status: only `COMPLETE` is `CLOSEABLE`; every
+other status is `KEEP_OPEN` and names the unmet condition and next safe action.
+Omit the footer for ordinary conversation that did not activate a LES task route.
+
 Completion claims require current evidence. A skill may report that a check was
 not run, unavailable, skipped, or stale; it may not promote that result to pass.
 

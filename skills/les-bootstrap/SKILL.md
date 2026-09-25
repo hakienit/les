@@ -30,6 +30,9 @@ Request, runtime constraints, project entrypoint, and current work state.
 Task state: outcome, scope, route, fallback, risk, active profile, evidence class,
 approval requirement, context trace, residual uncertainty, and terminal status.
 
+For task-scoped responses, use the closeability footer defined in
+`../../policies/workflow-contracts.md`.
+
 ## Guardrails
 
 Do not grant authority, duplicate policy, or load inactive profiles.

@@ -228,6 +228,15 @@ function fishPathSnippet(target) {
   return "# LES user-local CLI\nfish_add_path " + shellPathExpression(target);
 }
 
+function powerShellQuote(value) {
+  return "'" + value.replaceAll("'", "''") + "'";
+}
+
+function powerShellPathSnippet(target) {
+  const path = powerShellQuote(resolve(join(target, "bin")));
+  return "# LES user-local CLI\nif (-not (($env:Path -split [IO.Path]::PathSeparator) -contains " + path + ")) { $env:Path = " + path + " + [IO.Path]::PathSeparator + $env:Path }";
+}
+
 async function appendPathSnippet(path, snippet) {
   const current = await exists(path) ? await readFile(path, "utf8") : "";
   await mkdir(dirname(path), { recursive: true });
@@ -249,12 +258,13 @@ async function appendPathSnippet(path, snippet) {
 
 async function configurePosixPath(target) {
   const home = homedir();
+  const zshHome = process.env.ZDOTDIR ? resolve(process.env.ZDOTDIR) : home;
   const profiles = [
     join(home, ".profile"),
     join(home, ".bash_profile"),
     join(home, ".bashrc"),
-    join(home, ".zprofile"),
-    join(home, ".zshrc"),
+    join(zshHome, ".zprofile"),
+    join(zshHome, ".zshrc"),
     join(home, ".config", "fish", "config.fish")
   ];
   const changed = [];
@@ -268,6 +278,19 @@ async function configurePosixPath(target) {
   }
   if (changed.length) console.log("Added LES to PATH in " + changed.join(", ") + ". Open a new terminal to use `les`.");
   if (failed.length) console.error("[WARN] Could not persist LES PATH in " + failed.join("; ") + ".");
+}
+
+async function configurePowerShellPath(target) {
+  const command = process.platform === "win32" ? "powershell.exe" : "pwsh";
+  const result = spawnSync(command, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "$PROFILE"], {
+    encoding: "utf8",
+    env: process.env
+  });
+  if (result.status !== 0 || !result.stdout.trim()) return;
+  const profile = result.stdout.trim();
+  if (await appendPathSnippet(profile, powerShellPathSnippet(target))) {
+    console.log("Added LES to PowerShell profile " + profile + ". Open a new terminal to use `les`.");
+  }
 }
 
 async function configureWindowsPath(target) {
@@ -294,6 +317,7 @@ async function configureCommandPath(target) {
   try {
     if (process.platform === "win32") await configureWindowsPath(target);
     else await configurePosixPath(target);
+    await configurePowerShellPath(target);
   } catch (error) {
     const detail = process.platform === "win32"
       ? "Add " + resolve(join(target, "bin")) + " to the Windows user PATH manually."
