@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.5 - 2026-09-29
+
+- Add a Claude Code (Haiku 4.5) host smoke to `tools/behavior-eval.mjs` with a read-only tool set, an allowlisted host environment, and installed-store version reporting.
+- Drop the stale `packageVersion` field from `inventory.yaml`.
+
 ## 1.1.4 - 2026-09-25
 
 - Persist the user-local `les` command in `ZDOTDIR` and PowerShell profiles,
