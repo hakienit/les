@@ -1,11 +1,11 @@
 {
-  "provider": "codex",
-  "hostVersion": "codex-cli 0.158.0",
-  "capturedAt": "2026-09-29T07:54:16.857Z",
-  "model": "gpt-5.6-luna",
+  "provider": "claude-code",
+  "hostVersion": "2.1.284 (Claude Code)",
+  "capturedAt": "2026-09-29T08:40:28.107Z",
+  "model": "claude-haiku-4-5-20251001",
   "reasoningEffort": "medium",
   "hostSmoke": true,
-  "sandbox": "read-only",
+  "sandbox": "file tools only (Read,Glob,Grep), no shell; permission-mode dontAsk",
   "ephemeral": true,
   "repetitions": 1,
   "repeatability": {
@@ -41,13 +41,19 @@
     }
   },
   "discovery": {
-    "adapterPointer": "AGENTS.md -> LES-AGENT.md -> ~/.les-agents/adapters/codex/AGENTS.md",
+    "adapterPointer": "CLAUDE.md -> LES-AGENT.md -> ~/.les-agents/adapters/claude-code/CLAUDE.md",
     "manifest": "~/.les-agents/les-manifest.md"
   },
-  "globalInstall": false,
-  "publish": false,
-  "push": false,
-  "commit": false,
+  "store": {
+    "path": "~/.les-agents",
+    "packageVersion": "1.1.4",
+    "matchesPackage": true
+  },
+  "declared": {
+    "publish": false,
+    "push": false,
+    "commit": false
+  },
   "cases": [
     {
       "iteration": 1,
