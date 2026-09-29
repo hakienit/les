@@ -1,6 +1,5 @@
 {
   "inventoryVersion": 1,
-  "packageVersion": "1.0.1",
   "kernel": [
     "policies/README.md", "policies/principles.md", "policies/precedence.md",
     "policies/lifecycle.md", "policies/risk-model.md", "policies/memory-model.md",

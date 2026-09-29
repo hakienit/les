@@ -229,6 +229,24 @@ test("legacy add, diff, and update preserve a Markdown-only repo installation", 
   }
 });
 
+test("legacy rollback restores the installation saved by update", async () => {
+  const project = await mkdtemp(join(tmpdir(), "les-cli-rollback-"));
+  try {
+    assert.equal(run(["add", "--scope", "repo"], project).status, 0);
+    const principles = join(project, ".les-agents", "policies", "principles.md");
+    await writeFile(principles, "before update\n");
+    const updated = run(["update", "--scope", "repo"], project);
+    assert.equal(updated.status, 0);
+    assert.match(await readFile(principles, "utf8"), /# Principles/);
+    assert.equal(run(["rollback", "--scope", "repo"], project).status, 2);
+    const backup = updated.stdout.match(/Backup: (.+)/u)[1].trim();
+    assert.equal(run(["rollback", "--scope", "repo", "--backup", backup], project).status, 0);
+    assert.equal(await readFile(principles, "utf8"), "before update\n");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
 test("legacy update migrates a full repo payload to Markdown-only", async () => {
   const project = await mkdtemp(join(tmpdir(), "les-cli-migration-"));
   const installRoot = join(project, ".les-agents");

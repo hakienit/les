@@ -14,9 +14,11 @@ Then read `~/.les-agents/skills/les-bootstrap/SKILL.md` before starting work.
 <!-- LES-MANAGED
 {
   "configuredProviders": [
+    "claude-code",
     "codex"
   ],
   "activeProviders": [
+    "claude-code",
     "codex"
   ]
 }
