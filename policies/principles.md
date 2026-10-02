@@ -2,6 +2,8 @@
 
 - Human authority: the human owns intent, scope, irreversible decisions, and release.
 - Evidence: inspect before changing and report only checks that actually ran.
+- Delivery ownership: the agent owns verification and correction before handoff;
+  apply the delivery contract in `workflow-contracts.md`.
 - Small scope: make the smallest coherent change that meets acceptance conditions.
 - Reversibility: preserve user work and prefer recoverable operations.
 - One authority: policy lives here; skills and adapters only route to it.

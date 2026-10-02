@@ -93,6 +93,7 @@ function validate(item, result) {
     if (!output.includes(normalized) && !compactOutput.includes(compactCheck)) errors.push(`missing evidence: ${check}`);
   }
   if (!result.nextSafeAction?.trim()) errors.push("missing nextSafeAction");
+  if (item.expectedNextSafeAction !== undefined && result.nextSafeAction !== item.expectedNextSafeAction) errors.push(`nextSafeAction ${result.nextSafeAction} !== ${item.expectedNextSafeAction}`);
   return errors;
 }
 
@@ -101,6 +102,8 @@ async function stageWorkspace(item, workspace) {
     const staged = spawnSync(process.execPath, [cli, ...step], { cwd: workspace, encoding: "utf8", env: childEnv });
     if (staged.status !== 0) throw new Error(staged.stderr || staged.stdout || `LES ${step[0]} failed`);
   }
+  const entrypoint = join(workspace, "LES-AGENT.md");
+  await writeFile(entrypoint, (await readFile(entrypoint, "utf8")).replaceAll("~/.les-agents", resolve(store)));
   if (hostSmoke) {
     if (!(await readFile(join(workspace, host.pointer), "utf8")).includes("@./LES-AGENT.md")) throw new Error(host.name + " adapter pointer was not staged");
     if (item.mode === "user") await writeFile(join(workspace, "auth-boundary.md"), "A request checks only an untrusted session cookie before changing billing data.\n");
@@ -181,7 +184,7 @@ for (let iteration = 1; iteration <= repetitions; iteration += 1) for (const ite
     const outputPath = join(workspace, "result.json");
     const result = claude ? runClaude(item, workspace) : await runCodex(item, workspace, outputPath);
     const errors = validate(item, result);
-    results.push({ iteration, id: item.id, mode: item.mode, skill: item.skill, expectedStatus: item.expectedStatus, actualStatus: result.status, pass: errors.length === 0, errors });
+    results.push({ iteration, id: item.id, mode: item.mode, skill: item.skill, expectedStatus: item.expectedStatus, actualStatus: result.status, checks: result.checks, nextSafeAction: result.nextSafeAction, pass: errors.length === 0, errors });
   } catch (error) {
     results.push({ id: item.id, skill: item.skill, pass: false, errors: [error.message] });
   } finally {
@@ -211,7 +214,7 @@ if (reportPath) {
     ephemeral: true,
     repetitions,
     repeatability,
-    discovery: hostSmoke ? { adapterPointer: `${host.pointer} -> LES-AGENT.md -> ~/.les-agents/adapters/${host.adapter}/${host.pointer}`, manifest: "~/.les-agents/les-manifest.md" } : undefined,
+    discovery: hostSmoke ? { adapterPointer: `${host.pointer} -> LES-AGENT.md -> ${store}/adapters/${host.adapter}/${host.pointer}`, manifest: `${store}/les-manifest.md` } : undefined,
     store: { path: store.replace(homedir(), "~"), packageVersion: installed, matchesPackage: installed === packageVersion },
     declared: { publish: false, push: false, commit: false },
     cases: results,

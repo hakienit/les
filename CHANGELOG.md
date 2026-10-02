@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.6 - 2026-10-02
+
+- Make agents own verification, diff review, correction, and fresh proof before delivery, without requiring users to request another diff review.
+- Keep delivery incomplete when known delivery defects or required evidence remain unresolved, while preserving read-only review authority.
+- Add delivery completion scenarios and pin evaluation entrypoints to the selected LES store; retain checks and next safe actions in behavior reports.
+
 ## 1.1.5 - 2026-09-29
 
 - Add a Claude Code (Haiku 4.5) host smoke to `tools/behavior-eval.mjs` with a read-only tool set, an allowlisted host environment, and installed-store version reporting.

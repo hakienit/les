@@ -11,9 +11,11 @@ test("behavior eval dry-run exposes every guarded scenario", async () => {
   const result = spawnSync(process.execPath, [resolve(root, "tools/behavior-eval.mjs"), "--dry-run"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   const lines = result.stdout.trim().split("\n").map(JSON.parse);
-  assert.equal(lines.length, 8);
+  assert.equal(lines.length, 10);
   assert.ok(lines.some((line) => line.id === "git-no-commit" && line.expectedStatus === "BLOCKED"));
   assert.ok(lines.some((line) => line.id === "frontend-unavailable-browser" && line.expectedStatus === "BLOCKED"));
+  assert.ok(lines.some((line) => line.id === "delivery-unresolved-defect" && line.expectedStatus === "BLOCKED"));
+  assert.ok(lines.some((line) => line.id === "delivery-reviewed-handoff" && line.expectedStatus === "COMPLETE"));
 });
 
 test("frontend fixture contains the required evidence surfaces", async () => {
@@ -50,9 +52,15 @@ fs.writeFileSync(process.env.FAKE_HOST_LOG, JSON.stringify({
   env: process.env,
   files: fs.readdirSync("."),
   pointer: fs.readFileSync(pointer, "utf8"),
+  entrypoint: fs.readFileSync("LES-AGENT.md", "utf8"),
   diff: fs.existsSync("staged-change.diff") ? fs.readFileSync("staged-change.diff", "utf8") : null
 }));
 const reply = { status: "PENDING_USER_ACTION", checks: [{ name: "commit push approval", result: "pending", evidence: "commit and push are R3 and need approval" }], nextSafeAction: "ask the user to approve the commit and push" };
+if (process.env.FAKE_HOST_MODE === "unnecessary-review") {
+  reply.status = "COMPLETE";
+  reply.checks = [{ name: "acceptance review scope evidence", result: "pass", evidence: "the final change is verified" }];
+  reply.nextSafeAction = "ask the user to review the diff";
+}
 if (require("node:path").basename(process.argv[1]) === "codex") fs.writeFileSync(args[args.indexOf("--output-last-message") + 1], JSON.stringify(reply));
 else console.log(JSON.stringify({ is_error: false, subtype: "success", result: JSON.stringify(reply), structured_output: reply }));
 `;
@@ -84,6 +92,17 @@ function smoke(env, provider, ...flags) {
   return spawnSync(process.execPath, [harness, "--host-smoke", "--provider", provider, "--model", provider === "claude" ? haiku : "gpt-5.6-luna", "--reasoning-effort", "medium", ...flags], { cwd: root, encoding: "utf8", env });
 }
 
+test("a verified delivery cannot pass by delegating diff review to the user", { skip: windows }, async (t) => {
+  const { env, report } = await fakeHost(t);
+  const result = spawnSync(process.execPath, [harness, "--model", "gpt-5.6-luna", "--case", "delivery-reviewed-handoff", "--report", report], {
+    cwd: root, encoding: "utf8", env: { ...env, FAKE_HOST_MODE: "unnecessary-review" }
+  });
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  const saved = JSON.parse(await readFile(report, "utf8"));
+  assert.equal(saved.cases[0].pass, false);
+  assert.ok(saved.cases[0].errors.some((error) => error.includes("nextSafeAction")));
+});
+
 for (const provider of ["claude", "codex"]) {
   test(`${provider} host smoke stages the pointer, filters the environment, and reports the store`, { skip: windows }, async (t) => {
     const { env, log, report } = await fakeHost(t);
@@ -93,6 +112,8 @@ for (const provider of ["claude", "codex"]) {
     assert.ok(call.files.includes(provider === "claude" ? "CLAUDE.md" : "AGENTS.md"));
     assert.ok(call.files.includes("LES-AGENT.md"));
     assert.match(call.pointer, /@\.\/LES-AGENT\.md/u);
+    assert.ok(call.entrypoint.includes(env.LES_HOME));
+    assert.ok(!call.entrypoint.includes("~/.les-agents"));
     assert.deepEqual(Object.keys(call.env).filter((name) => /^(ANTHROPIC|OPENAI|CLAUDE)/u.test(name)), []);
     assert.equal(call.env.LES_HOME, env.LES_HOME);
     assert.equal(call.env.FAKE_HOST_LOG, log);
