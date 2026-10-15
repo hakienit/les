@@ -1,0 +1,207 @@
+{
+  "provider": "codex",
+  "capturedAt": "2026-10-14T10:21:43.781Z",
+  "model": "gpt-5.6-luna",
+  "reasoningEffort": "medium",
+  "hostSmoke": false,
+  "sandbox": "read-only",
+  "ephemeral": true,
+  "repetitions": 4,
+  "repeatability": {
+    "frontend-unavailable-browser": {
+      "stable": false,
+      "statuses": [
+        "BLOCKED",
+        "SKIPPED",
+        "BLOCKED",
+        "BLOCKED"
+      ]
+    }
+  },
+  "store": {
+    "path": "/private/tmp/claude-501/-Users-ikeha-orca-workspaces-les-logperch/445dd3c9-526b-4575-a1e2-e48b1d8b0b5a/scratchpad/les-store-fix",
+    "packageVersion": "1.1.7",
+    "matchesPackage": true
+  },
+  "declared": {
+    "publish": false,
+    "push": false,
+    "commit": false
+  },
+  "cases": [
+    {
+      "iteration": 1,
+      "id": "frontend-unavailable-browser",
+      "skill": "les-frontend-verification",
+      "expectedStatus": "BLOCKED",
+      "actualStatus": "BLOCKED",
+      "checks": [
+        {
+          "name": "unavailable",
+          "result": "unavailable",
+          "evidence": "No safe browser URL or host session is available; runtime verification cannot be performed."
+        },
+        {
+          "name": "browser",
+          "result": "unavailable",
+          "evidence": "Browser journey, console, network, and rendered UI evidence were not collected."
+        },
+        {
+          "name": "keyboard",
+          "result": "unavailable",
+          "evidence": "Keyboard and focus interaction evidence requires a browser session and was not collected."
+        },
+        {
+          "name": "accessibility",
+          "result": "unavailable",
+          "evidence": "Accessibility behavior and assistive-technology evidence were not collected."
+        },
+        {
+          "name": "responsive",
+          "result": "unavailable",
+          "evidence": "Viewport evidence at supported responsive sizes was not collected."
+        },
+        {
+          "name": "performance",
+          "result": "unavailable",
+          "evidence": "Performance metrics and runtime loading evidence were not collected."
+        }
+      ],
+      "nextSafeAction": "Provide an approved safe browser URL or host session, then rerun frontend verification.",
+      "pass": true,
+      "errors": []
+    },
+    {
+      "iteration": 2,
+      "id": "frontend-unavailable-browser",
+      "skill": "les-frontend-verification",
+      "expectedStatus": "BLOCKED",
+      "actualStatus": "SKIPPED",
+      "checks": [
+        {
+          "name": "unavailable",
+          "result": "unavailable",
+          "evidence": "No safe browser URL or host session is available."
+        },
+        {
+          "name": "browser",
+          "result": "unavailable",
+          "evidence": "Browser journey, console/network, and rendered UI evidence were not run."
+        },
+        {
+          "name": "keyboard",
+          "result": "unavailable",
+          "evidence": "Keyboard navigation and focus behavior were not verified."
+        },
+        {
+          "name": "accessibility",
+          "result": "unavailable",
+          "evidence": "Accessibility semantics and tree evidence were not verified."
+        },
+        {
+          "name": "responsive",
+          "result": "unavailable",
+          "evidence": "Supported viewport behavior was not verified."
+        },
+        {
+          "name": "performance",
+          "result": "unavailable",
+          "evidence": "No runtime performance measurement or browser performance evidence was collected."
+        }
+      ],
+      "nextSafeAction": "Provide a safe verified browser URL or host session, then rerun frontend verification.",
+      "pass": false,
+      "errors": [
+        "status SKIPPED !== BLOCKED"
+      ]
+    },
+    {
+      "iteration": 3,
+      "id": "frontend-unavailable-browser",
+      "skill": "les-frontend-verification",
+      "expectedStatus": "BLOCKED",
+      "actualStatus": "BLOCKED",
+      "checks": [
+        {
+          "name": "browser",
+          "result": "unavailable",
+          "evidence": "No safe browser URL or host session is available; no browser journey was run."
+        },
+        {
+          "name": "performance",
+          "result": "unavailable",
+          "evidence": "Performance evidence requires a reachable frontend runtime; no performance check was run."
+        },
+        {
+          "name": "keyboard",
+          "result": "unavailable",
+          "evidence": "No browser session was available, so keyboard or focus behavior was not verified."
+        },
+        {
+          "name": "accessibility",
+          "result": "unavailable",
+          "evidence": "No browser session was available, so accessibility behavior was not verified."
+        },
+        {
+          "name": "responsive",
+          "result": "unavailable",
+          "evidence": "No browser session or target viewport was available, so responsive behavior was not verified."
+        },
+        {
+          "name": "unavailable",
+          "result": "pass",
+          "evidence": "Unavailable evidence was explicitly recorded and not treated as passed."
+        }
+      ],
+      "nextSafeAction": "Provide an approved safe frontend URL or host session, then rerun browser, keyboard, accessibility, responsive, and performance checks.",
+      "pass": true,
+      "errors": []
+    },
+    {
+      "iteration": 4,
+      "id": "frontend-unavailable-browser",
+      "skill": "les-frontend-verification",
+      "expectedStatus": "BLOCKED",
+      "actualStatus": "BLOCKED",
+      "checks": [
+        {
+          "name": "unavailable",
+          "result": "unavailable",
+          "evidence": "No safe browser URL or host session was available; required frontend runtime evidence could not be collected."
+        },
+        {
+          "name": "browser",
+          "result": "unavailable",
+          "evidence": "Browser journey, console/network, screenshots, and rendered UI evidence were not run."
+        },
+        {
+          "name": "keyboard",
+          "result": "unavailable",
+          "evidence": "Keyboard and focus behavior were not verified."
+        },
+        {
+          "name": "accessibility",
+          "result": "unavailable",
+          "evidence": "Accessibility-tree and manual accessibility evidence were not collected."
+        },
+        {
+          "name": "responsive",
+          "result": "unavailable",
+          "evidence": "Supported viewport behavior was not verified."
+        },
+        {
+          "name": "performance",
+          "result": "unavailable",
+          "evidence": "No browser session was available for performance measurements or runtime performance evidence."
+        }
+      ],
+      "nextSafeAction": "Provide an explicitly verified safe browser URL or host session, then rerun frontend verification.",
+      "pass": true,
+      "errors": []
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "total": 4
+  }
+}

@@ -77,6 +77,20 @@ inputs, and result aggregation are explicit.
 Use only `COMPLETE`, `BLOCKED`, `PENDING_USER_ACTION`, `FAILED`, or `SKIPPED`.
 Any non-`COMPLETE` status names the unmet condition and next safe action.
 
+Choose by the condition, not by who must act:
+- `BLOCKED`: a contradiction between same-authority instructions, unresolved
+  ownership, unavailable required context or evidence (browser, host, or
+  runtime), or a flow that cannot be determined. Use it even when an owner must
+  resolve the condition.
+- `SKIPPED`: a verification category or tier that does not apply to the change,
+  with the alternative evidence named. Required evidence that is unavailable is
+  never `SKIPPED`.
+- `PENDING_USER_ACTION`: an approval gate, or a choice among valid options that
+  the agent cannot make.
+- `COMPLETE`: the workflow's Done-when is met. An investigation is `COMPLETE`
+  when it names the missing access or evidence as the next safe action; it does
+  not wait for that evidence.
+
 Evidence records never convert unavailable or waived checks into passes. A host
 smoke waiver remains `PENDING_HOST_SMOKE` and is reported separately from local
 package readiness.

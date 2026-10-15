@@ -10,8 +10,9 @@ browser. It extends LES evidence rules; it does not authorize production writes.
 3. Start read-only. List every mutating action and obtain approval immediately
    before that action; destructive actions remain out of scope.
 
-If the URL, safe environment, or browser is unavailable, report `unavailable`
-with the missing condition and stop the browser lane.
+If the URL, safe environment, or browser is unavailable, mark the browser
+category `unavailable`, name the missing condition, stop the browser lane, and
+end the task with terminal status `BLOCKED`.
 
 ## Review matrix
 

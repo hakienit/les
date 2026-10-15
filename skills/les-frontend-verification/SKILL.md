@@ -23,7 +23,7 @@ Changed UI, relevant states, viewport support, and API boundary.
 
 1. Map acceptance to direction, journeys, states, viewports, and boundary data. Done when: every applicable condition has a check and a review surface.
 2. Check design quality, responsive interaction, keyboard/focus, accessibility, boundary, and performance conditions. Done when: evidence types remain separate and React/Next guidance is used only for matching projects.
-3. Run the critical browser journey when the UI boundary requires it. Done when: action, viewport, console/network result, and observed result are recorded or explicitly unavailable.
+3. Run the critical browser journey when the UI boundary requires it. Done when: action, viewport, console/network result, and observed result are recorded. If the journey cannot be reached, stop with `BLOCKED`.
 4. Report residual uncertainty and terminal status. Done when: unavailable evidence is named and never converted into pass.
 
 ## Output
@@ -37,9 +37,9 @@ Do not weaken universal rules or claim unavailable visual, keyboard, accessibili
 responsive, performance, or browser checks passed.
 
 Use `BLOCKED` when a required browser journey cannot be safely reached or
-verified. Use `SKIPPED` only when a verification category is not applicable and
-the alternative evidence is named; keep unavailable checks explicitly
-unavailable in either case.
+verified, even when the owner can supply access. Use `SKIPPED` only when a
+verification category does not apply to the change and the alternative evidence
+is named. Mark unavailable checks `unavailable`; never mark them passed.
 
 ## Verification
 

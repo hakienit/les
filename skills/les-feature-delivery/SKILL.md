@@ -23,7 +23,7 @@ Approved behavior, acceptance checks, affected flow, and constraints.
 
 1. Inspect the responsible seam and define exclusions. Done when: scope is bounded.
 2. Establish behavioral proof and implement one vertical slice. Done when: acceptance behavior exists.
-3. Run required checks and review the diff. Done when: evidence is recorded.
+3. Run required checks, fix findings in scope, rerun affected checks, and review the final diff. Done when: evidence is recorded and no known delivery defect remains.
 
 ## Output
 

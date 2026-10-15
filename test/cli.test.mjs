@@ -164,7 +164,7 @@ test("active preserves a project-owned provider entrypoint", async () => {
   const project = await mkdtemp(join(tmpdir(), "les-cli-adapter-"));
   const home = await mkdtemp(join(tmpdir(), "les-cli-adapter-home-"));
   try {
-    const env = { LES_HOME: home };
+    const env = { LES_HOME: home, LES_DISABLE_PATH_SETUP: "1" };
     assert.equal(run([], project, env).status, 0);
     assert.equal(run(["init"], project, env).status, 0);
     await writeFile(join(project, "GEMINI.md"), "project owned\n");
@@ -188,7 +188,7 @@ test("connect discovers available CLIs and selects connected/default-on provider
       await writeFile(command, "#!/bin/sh\nexit 0\n");
       await chmod(command, 0o755);
     }
-    const env = { LES_HOME: home, PATH: cliBin };
+    const env = { LES_HOME: home, PATH: cliBin, LES_DISABLE_PATH_SETUP: "1" };
     assert.equal(run([], project, env).status, 0);
     assert.equal(run(["init"], project, env).status, 0);
 
@@ -284,7 +284,7 @@ test("user install never writes provider home directories", async () => {
   const home = await mkdtemp(join(tmpdir(), "les-cli-isolation-home-"));
   const providerHome = await mkdtemp(join(tmpdir(), "les-cli-provider-home-"));
   try {
-    const env = { LES_HOME: home, CODEX_HOME: join(providerHome, ".codex") };
+    const env = { LES_HOME: home, CODEX_HOME: join(providerHome, ".codex"), LES_DISABLE_PATH_SETUP: "1" };
     assert.equal(run([], project, env).status, 0);
     assert.equal(run(["init"], project, env).status, 0);
     assert.equal(run(["active", "codex"], project, env).status, 0);
