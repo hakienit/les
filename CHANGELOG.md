@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 - 2026-10-16
+
+- Add `les lint FILE...` to flag placeholders, unmeasurable or unverifiable acceptance criteria, and files with no acceptance section.
+- Add `les guard on|off`, an opt-in Claude Code `PreToolUse` hook written to `.claude/settings.local.json`. It blocks secret reads, deletes outside the project, and force pushes to protected branches, and preserves other hooks and settings.
+
 ## 1.1.8 - 2026-10-16
 
 - Simplify `les connect`: create `LES-AGENT.md` when missing, accept provider names or `--all`, and use one preselected prompt instead of two. Hide legacy `active` and repo-scope commands from help; they still work.
