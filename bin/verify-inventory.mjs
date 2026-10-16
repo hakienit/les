@@ -118,8 +118,11 @@ for (const provider of providers) {
   if (manifest.userInvokedSkills.some((name) => inventory.skills.find((skill) => skill.name === name)?.invocation !== "user")) fail("user invocation mismatch: " + provider);
   if (!manifest.modelInvokedSkills.some((name) => inventory.skills.find((skill) => skill.name === name)?.invocation === "model") || !manifest.userInvokedSkills.length || !manifest.promotedSkills.some((name) => inventory.skills.find((skill) => skill.name === name)?.profile === "frontend")) fail("host manifest lacks discovery smoke coverage: " + provider);
 }
-const generated = spawnSync(process.execPath, [join(root, "bin/generate-adapter-manifests.mjs")], { cwd: root, encoding: "utf8" });
-if (generated.status !== 0) fail("generated manifest drift\n" + generated.stderr.trim());
+// Readiness evidence lives in the source checkout; an installed store has no test/ payload to check against.
+if (await access(join(root, "test")).then(() => true, () => false)) {
+  const generated = spawnSync(process.execPath, [join(root, "bin/generate-adapter-manifests.mjs")], { cwd: root, encoding: "utf8" });
+  if (generated.status !== 0) fail("generated manifest drift\n" + generated.stderr.trim());
+}
 
 const forbiddenFields = ["prove" + "nance", "source" + "Revision", "source" + "Repository"];
 const forbidden = new RegExp("\\b(?:" + forbiddenFields.join("|") + ")\\b|https?:\\/\\/(?!github\\.com\\/hakienit\\/les|registry\\.npmjs\\.org\\/@hakienit\\/les)", "iu");

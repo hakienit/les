@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.7 - 2026-10-14
+
+- Require feature delivery, bug fixing, and refactoring completion to meet the delivery ownership contract, so known delivery defects block `COMPLETE` in the skill and workflow path too.
+- Clarify terminal status selection: contradictions and unresolved ownership are `BLOCKED` even when an owner must act; `PENDING_USER_ACTION` is for approvals and choices the agent cannot make.
+- Ship `bin/les.cmd` as a registered public path, and skip the source-only readiness check when verifying an installed store.
+
 ## 1.1.6 - 2026-10-02
 
 - Make agents own verification, diff review, correction, and fresh proof before delivery, without requiring users to request another diff review.

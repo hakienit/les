@@ -42,7 +42,7 @@ Load each phase just in time. Do not claim a later state while an earlier exit i
 **Activate:** implementation complete. **Input:** targeted evidence. **Output:** focused result. **Done when:** changed contract is checked. **Stop:** `FAILED` on a failed required check.
 
 ## 14. Integrated verification
-**Activate:** boundary or R2 change. **Input:** affected subsystem. **Output:** integration result. **Done when:** required tier passes. **Stop:** `SKIPPED` only when unavailable evidence is named.
+**Activate:** boundary or R2 change. **Input:** affected subsystem. **Output:** integration result. **Done when:** required tier passes. **Stop:** `BLOCKED` when required integrated proof is unavailable; `SKIPPED` only for a tier that does not apply, with the alternative named.
 
 ## 15. Diff and policy review
 **Activate:** verification complete. **Input:** final diff and active policy. **Output:** scope and policy assessment. **Done when:** delivery findings are resolved with fresh proof under `workflow-contracts.md`; read-only review findings are reported with coverage. **Stop:** a non-`COMPLETE` delivery state on unresolved defects, unavailable required proof, or an unmet authority gate.

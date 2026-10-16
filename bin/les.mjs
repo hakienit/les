@@ -213,7 +213,6 @@ async function copyDistribution(stage, root = packageRoot) {
   const launcher = join(stage, "bin", "les");
   await mkdir(dirname(launcher), { recursive: true });
   await writeFile(launcher, "#!/bin/sh\nexec node \"$(dirname \"$0\")/les.mjs\" \"$@\"\n", { mode: 0o755 });
-  await writeFile(join(stage, "bin", "les.cmd"), "@echo off\r\nnode \"%~dp0les.mjs\" %*\r\n", { mode: 0o755 });
 }
 
 function shellQuote(value) {

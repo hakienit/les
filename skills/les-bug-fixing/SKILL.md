@@ -23,7 +23,7 @@ Reported symptom, reproduction, and affected flow.
 
 1. Reproduce and trace all callers to the responsible owner. Done when: cause is evidenced.
 2. Add the smallest regression proof. Done when: old behavior fails.
-3. Correct the owner and verify adjacent paths. Done when: proof passes.
+3. Correct the owner, verify adjacent paths, and fix any finding. Done when: proof passes and no known delivery defect remains.
 
 ## Output
 

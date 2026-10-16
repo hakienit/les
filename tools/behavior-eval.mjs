@@ -132,7 +132,7 @@ const effort = reasoningEffort || (claude ? "medium" : undefined);
 const clip = (text) => String(text ?? "").replaceAll(homedir(), "~").slice(0, 300);
 
 function hostRun(command, argv, workspace) {
-  const run = spawnSync(command, argv, { cwd: workspace, encoding: "utf8", timeout: 180000, env: childEnv });
+  const run = spawnSync(command, argv, { cwd: workspace, encoding: "utf8", timeout: 180000, maxBuffer: 64 * 1024 * 1024, env: childEnv });
   if (run.error) throw new Error(`${command}: ${run.error.message}`);
   return run;
 }
