@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0 - 2026-10-16
+
+- `les guard on` now also enforces the bootstrap in Claude Code. A `SessionStart` hook (`guard.mjs session-start`) resets a per-session read log after startup, resume, `/clear`, and compaction. The `PreToolUse` guard then blocks `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, and `Bash` until the adapter, `les-bootstrap`, and every file it `loads` were read with the Read tool. `les guard off` removes both hooks.
+
 ## 1.2.1 - 2026-10-16
 
 - `les guard on` now adds `.claude/settings.local.json` to the repository's `.git/info/exclude`, so the personal hook file does not show up in `git status`. It is skipped outside a git repository.
