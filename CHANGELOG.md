@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.8 - 2026-10-16
+
+- Simplify `les connect`: create `LES-AGENT.md` when missing, accept provider names or `--all`, and use one preselected prompt instead of two. Hide legacy `active` and repo-scope commands from help; they still work.
+- Extend `les doctor` with `store-integrity` (managed files against manifest hashes) and `bootstrap-pointer` (`LES-AGENT.md` paths that no longer resolve in the store).
+- Persist the user-local `les` PATH in `.profile` and the login shell's rc file, refreshing other known profiles only when they exist; print one install message with a reload command.
+- Show the skill-path upgrade notice only when upgrading from a version before 1.1.2.
+
 ## 1.1.7 - 2026-10-14
 
 - Require feature delivery, bug fixing, and refactoring completion to meet the delivery ownership contract, so known delivery defects block `COMPLETE` in the skill and workflow path too.
