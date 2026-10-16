@@ -1,127 +1,191 @@
-# Living Engineering System
+# LES: Living Engineering System
 
-LES is a provider-neutral engineering methodology for human-directed AI
-delivery. Policies own behavior, skills expose operational entrypoints, profiles
-add optional domain rules, and adapters route hosts to the same bootstrap.
+**A provider-neutral engineering methodology for human-directed AI delivery.**
 
-## Install once per user
+Install LES once, point a repository at it, and every AI coding CLI follows the
+same discipline: classify the risk, load only the context the task needs, prove
+the result with evidence, and stop for a human wherever a human must decide.
 
-Run from any directory:
+~~~sh
+npx -y @hakienit/les     # once per machine
+cd my-project
+les connect              # once per repository
+~~~
+
+## Why LES
+
+- **One discipline, every CLI.** Codex, Claude Code, Gemini CLI, and
+  Antigravity read the same bootstrap, so switching tools does not change how
+  work is done.
+- **Evidence, not claims.** Every task ends in a status (`COMPLETE`, `BLOCKED`,
+  `PENDING_USER_ACTION`, `FAILED`, or `SKIPPED`) backed by the checks that were
+  actually run.
+- **Humans keep authority.** Risk levels `R0` to `R3` decide what needs
+  approval. Push, history rewrite, force operations, and destructive cleanup
+  are `R3`. A handoff never grants authority.
+- **Almost no footprint.** A repository gets `LES-AGENT.md` and one small
+  pointer file per provider. The LES source never enters your repository.
+
+## Quick start
+
+**1. Install.** Run this from any directory except a checkout of this
+repository, where `npx` runs the local package instead of the published one.
 
 ~~~sh
 npx -y @hakienit/les
 ~~~
 
-The installer stores the CLI and LES source in `~/.les-agents` and persists its
-`bin` directory in the user PATH. On macOS and Linux it updates common POSIX,
-fish, zsh (`ZDOTDIR` included), and PowerShell profiles; on Windows it updates
-the user PATH, the PowerShell profile, and installs a `les.cmd` shim. Open a
-new terminal after the first install. The terminal that ran `npx` must run
-`source ~/.zshrc` (or its shell equivalent) once because a child process cannot
-change its parent shell's PATH. It does not write to `~/.agents`, `~/.codex`,
-`~/.claude`, `~/.gemini`, or any other provider directory.
+Open a new terminal afterwards, or run the `source` command the installer
+prints, so `les` is on your `PATH`.
 
-The user store intentionally contains the package source. Repositories never
-receive that source tree.
-
-## Set up a repository
+**2. Connect a repository.**
 
 ~~~sh
 cd my-project
 les connect
 ~~~
 
-`les connect` creates one tracked Markdown entrypoint, `LES-AGENT.md`, that
-points the AI CLI to `~/.les-agents`. It detects the supported AI CLIs installed
-on the machine, preselects them all, and enables the ones you confirm with
-Space and Enter. Skip the prompt with `les connect --all` or name providers:
-`les connect codex claude-code`. Turn a provider off or on later with
-`les off <provider>` and `les on <provider>`. `les init` still creates
-`LES-AGENT.md` alone.
+LES detects the AI CLIs on your machine and preselects them all. Press Enter to
+accept, or skip the prompt:
 
-LES creates a small native pointer to `LES-AGENT.md` for each enabled
-provider:
+~~~sh
+les connect --all                  # every detected CLI
+les connect codex claude-code      # exactly these
+~~~
 
-| Provider | Pointer |
+**3. Work as usual.** Your AI CLI now loads LES before it starts. Check the
+setup any time with `les doctor`.
+
+## How it works
+
+~~~text
+your request
+   -> provider pointer (AGENTS.md, CLAUDE.md, GEMINI.md, or agent.md)
+   -> LES-AGENT.md
+   -> bootstrap: precedence, route, risk, profile, verification tier
+   -> one skill, with only the rules and workflows it activates
+   -> evidence and a terminal status
+~~~
+
+| Layer | Role |
+| --- | --- |
+| `policies/` | The kernel: principles, precedence, a 17-phase lifecycle, 14 rules, and 10 workflows. |
+| `skills/` | Operational entrypoints, each with a trigger, steps with completion criteria, and guardrails. |
+| `profiles/` | Optional domain rules. The frontend profile covers design, accessibility, performance, and browser proof. |
+| `adapters/` | Thin host routing so each CLI reaches the same bootstrap. |
+| `templates/project/` | Project-owned context, decision, and handoff templates. |
+
+Skills cover the whole delivery path: discovery, planning, specification, task
+decomposition, feature delivery, bug fixing, refactoring, migration, incident
+hotfix, review, verification, security review, release readiness, and handoff.
+Frontend work adds a preview gate for Figma or wireframe input, design,
+accessibility, performance, and verification skills.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `les` | Install or update the user-local store in `~/.les-agents`. |
+| `les connect [provider...] [--all]` | Set up the current repository: create `LES-AGENT.md` and enable providers. |
+| `les on [provider]`, `les off [provider]` | Enable or disable routing for one or all configured providers. |
+| `les doctor` | Check the install, store integrity, repository pointers, and updates. |
+| `les lint FILE...` | Flag placeholders and unverifiable acceptance criteria in a spec. |
+| `les guard on`, `les guard off` | Block risky commands in Claude Code. |
+| `les init` | Create `LES-AGENT.md` only. |
+
+Add `--dry-run` to any repository command to see its plan without writing.
+
+### Provider pointers
+
+| Provider | Pointer file |
 | --- | --- |
 | Codex | `AGENTS.md` |
 | Claude Code | `CLAUDE.md` |
 | Gemini CLI | `GEMINI.md` |
 | Antigravity | `.agents/agents/les/agent.md` |
 
-LES never overwrites a project-owned native pointer. If one already exists,
-merge the printed pointer manually. The pointer and `LES-AGENT.md` are the only
-LES files created in the repository; no `.les-agents/` source tree is created.
+LES never overwrites a project-owned pointer. If one exists, it prints the
+pointer to merge by hand. Which providers are configured and active is stored in
+a managed comment inside `LES-AGENT.md`, so there is no extra state file.
 
-Enable or disable routing later:
+## Safety nets
 
-~~~sh
-les on                 # enable configured providers
-les off                # disable active providers
-les on codex
-les off codex
-~~~
-
-The provider state is stored in the managed comment inside `LES-AGENT.md`, so
-there is no extra repo-local state file. `les active <provider>` remains a
-legacy compatibility alias for directly enabling one provider.
-
-## Guard risky commands (Claude Code)
+### Guard risky commands (Claude Code)
 
 ~~~sh
 les guard on
 ~~~
 
-`les guard on` adds a `PreToolUse` hook to `.claude/settings.local.json` (your
-personal, normally untracked file) that blocks, before they run: reading
-`.env` files, SSH keys, and cloud credentials; `rm` or `find -delete` aimed
-outside the project, at `~`, or at `/`; and force pushes to `main`, `master`,
-`trunk`, `develop`, `release*`, or with no branch named. Other hooks and
-settings are preserved. `les guard off` removes only the LES entry. The guard
-is a safety net for common mistakes, not a sandbox: a determined command can
-still get around pattern matching.
+Adds a `PreToolUse` hook to `.claude/settings.local.json`, your personal
+settings file, and lists that file in `.git/info/exclude` so it stays out of
+`git status`. The hook blocks, before they run:
 
-## Lint a spec
+- reading `.env` files, SSH keys, and cloud credentials;
+- `rm` or `find -delete` aimed outside the project, at `~`, or at `/`;
+- force pushes to `main`, `master`, `trunk`, `develop`, `release*`, or with no
+  branch named.
+
+Other hooks and settings are preserved, and `les guard off` removes only the
+LES entry. The guard catches common mistakes through pattern matching. It is
+not a sandbox, and a determined command can still get around it.
+
+### Lint a spec
 
 ~~~sh
 les lint docs/specs/my-feature.md
 ~~~
 
-`les lint` reads Markdown files and reports placeholders (`TBD`, `TODO`),
-acceptance criteria that use unmeasurable words ("fast", "works properly"),
-criteria with no observable check, and files with no acceptance section. It
-exits 1 when it finds anything. It is a heuristic aid for `les-specification`,
-not a replacement for review.
+Reports placeholders (`TBD`, `TODO`), acceptance criteria that use unmeasurable
+words such as "fast" or "works properly", criteria with no observable check,
+and files with no acceptance section. It exits 1 when it finds anything. It is
+a heuristic aid for `les-specification`, not a replacement for review.
 
-## Updates and status
+## Keep it current
 
-No repository needs to be initialized again after an update. Every initialized
-repository points to the stable user store, so updating that store updates all
-repositories:
+Every repository points at the stable user store, so updating the store updates
+all of them. No repository needs to be initialized again.
 
 ~~~sh
 npx -y @hakienit/les
 les doctor
 ~~~
 
-Repositories initialized before the `les-*` skill-path migration may still
-point to the old bootstrap path. After an update, follow the printed notice and
-change their `LES-AGENT.md` pointer to
-`~/.les-agents/skills/les-bootstrap/SKILL.md`.
-
-`les doctor` checks the installed version against the current npm package
-version. Known update results are cached for at most one day; a cache that only
-contains the installed version is rechecked so a newly published version is
-not hidden. When a newer version exists it prints:
+`les doctor` also verifies that managed files still match the install manifest
+and that `LES-AGENT.md` points at paths that exist. It compares the installed
+version with npm at most once a day and prints:
 
 ~~~text
 [UPDATE_AVAILABLE] les: 1.0.0 -> 1.0.1; run npx -y @hakienit/les
 ~~~
 
-The check is informational and never updates automatically. If `les` is never
-run, LES does not install a shell hook or background process to show notices.
+The check is informational. LES never updates itself, and it installs no shell
+hook or background process.
 
-## Legacy repo-local payload
+Repositories initialized before the `les-*` skill-path migration may still point
+at the old bootstrap path. `les doctor` reports it. Change the `LES-AGENT.md`
+pointer to `~/.les-agents/skills/les-bootstrap/SKILL.md`.
+
+<details>
+<summary>What the installer changes</summary>
+
+The installer copies the CLI and LES source into `~/.les-agents` and puts its
+`bin` directory on your `PATH`:
+
+- macOS and Linux: `.profile` and the rc file of your login shell (zsh, bash, or
+  fish). Other known profiles are refreshed only if they already exist.
+  `ZDOTDIR` is honored.
+- PowerShell: your PowerShell profile.
+- Windows: the user `PATH`, plus a `les.cmd` shim.
+
+It never writes to `~/.agents`, `~/.codex`, `~/.claude`, `~/.gemini`, or any
+other provider directory. A child process cannot change its parent shell's
+`PATH`, so the terminal that ran `npx` needs one `source` of its profile, such
+as `source ~/.zshrc`.
+
+</details>
+
+<details>
+<summary>Legacy repo-local payload</summary>
 
 Older installations can still be maintained explicitly:
 
@@ -132,22 +196,13 @@ les update --scope repo
 les rollback --scope repo --backup <backup-path>
 ~~~
 
-This compatibility path copies only Markdown payload files and adds
-`.les-agents/` to `.gitignore`. New installations should use the user-local
-flow above.
+This path copies only Markdown payload files and adds `.les-agents/` to
+`.gitignore`. `les active <provider>` also remains as an alias for enabling one
+provider. New installations should use the user-local flow above.
 
-## Structure
+</details>
 
-| Path | Authority |
-| --- | --- |
-| `policies/` | Canonical kernel, universal rules, and workflows. |
-| `skills/` | Operational entrypoints and capability catalog. |
-| `profiles/` | Optional domain constraints. |
-| `templates/project/` | Project-owned context and governance templates. |
-| `adapters/` | Host routing and machine-readable discovery metadata. |
-| `inventory.yaml` | Exact public payload registry. |
-
-## Local gates
+## Contributing
 
 ~~~sh
 npm test
@@ -155,5 +210,10 @@ npm run verify-inventory
 npm run verify-release
 ~~~
 
-These commands are local checks. Publication, installation, provider activation,
-committing, and external mutation remain separate human decisions.
+These are local checks. Publication, installation, provider activation,
+committing, and external mutation remain separate human decisions. Release
+history is in `CHANGELOG.md`.
+
+## License
+
+MIT. See `LICENSE`.
