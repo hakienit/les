@@ -52,6 +52,7 @@ test("user install, repo init, routing, and cached update notice work without re
     const env = {
       LES_HOME: home,
       HOME: shellHome,
+      SHELL: "/bin/zsh",
       ZDOTDIR: zshHome,
       POWERSHELL_PROFILE: powerShellProfile,
       ...(process.platform !== "win32" ? { PATH: powerShellBin + ":/usr/bin:/bin" } : {}),
@@ -93,7 +94,11 @@ test("user install, repo init, routing, and cached update notice work without re
 
     const refreshed = run([], project, env);
     assert.equal(refreshed.status, 0, refreshed.stderr);
-    assert.match(refreshed.stdout, /NOTICE: LES skill paths now use `skills\/les-\*`/);
+    assert.doesNotMatch(refreshed.stdout, /NOTICE/);
+    assert.equal((refreshed.stdout.match(/Added LES to PATH/g) || []).length, 0);
+    assert.equal(await access(join(shellHome, ".bashrc")).then(() => true).catch(() => false), false);
+    assert.equal(await access(join(shellHome, ".config", "fish", "config.fish")).then(() => true).catch(() => false), false);
+    await writeFile(join(home, "les-manifest.md"), (await readFile(join(home, "les-manifest.md"), "utf8")).replace(`"packageVersion": "${packageMetadata.version}"`, '"packageVersion": "1.0.0"'));
     await mkdir(join(home, "skills", "bootstrap"), { recursive: true });
     await writeFile(join(home, "skills", "bootstrap", "SKILL.md"), "legacy\n");
     const updated = run([], project, env);

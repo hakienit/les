@@ -267,25 +267,21 @@ async function appendPathSnippet(path, snippet) {
 async function configurePosixPath(target) {
   const home = homedir();
   const zshHome = process.env.ZDOTDIR ? resolve(process.env.ZDOTDIR) : home;
-  const profiles = [
-    join(home, ".profile"),
-    join(home, ".bash_profile"),
-    join(home, ".bashrc"),
-    join(zshHome, ".zprofile"),
-    join(zshHome, ".zshrc"),
-    join(home, ".config", "fish", "config.fish")
-  ];
+  const fish = join(home, ".config", "fish", "config.fish");
+  const known = [join(home, ".profile"), join(home, ".bash_profile"), join(home, ".bashrc"), join(zshHome, ".zprofile"), join(zshHome, ".zshrc"), fish];
+  const own = { zsh: [join(zshHome, ".zshrc")], bash: [join(home, ".bashrc"), join(home, ".bash_profile")], fish: [fish] }[basename(process.env.SHELL || "")] || [];
+  // Write .profile and the login shell's rc; refresh other profiles only if they already exist.
+  const profiles = [join(home, ".profile"), ...own];
+  for (const path of known) if (!profiles.includes(path) && await exists(path)) profiles.push(path);
   const changed = [];
-  const failed = [];
   for (const path of profiles) {
     try {
-      if (await appendPathSnippet(path, path.endsWith("config.fish") ? fishPathSnippet(target) : posixPathSnippet(target))) changed.push(path);
+      if (await appendPathSnippet(path, path === fish ? fishPathSnippet(target) : posixPathSnippet(target))) changed.push(path);
     } catch (error) {
-      failed.push(path + ": " + error.message);
+      console.error("[WARN] Could not persist LES PATH in " + path + ": " + error.message);
     }
   }
-  if (changed.length) console.log("Added LES to PATH in " + changed.join(", ") + ". Open a new terminal to use `les`.");
-  if (failed.length) console.error("[WARN] Could not persist LES PATH in " + failed.join("; ") + ".");
+  return changed;
 }
 
 async function configurePowerShellPath(target) {
@@ -294,11 +290,9 @@ async function configurePowerShellPath(target) {
     encoding: "utf8",
     env: process.env
   });
-  if (result.status !== 0 || !result.stdout.trim()) return;
+  if (result.status !== 0 || !result.stdout.trim()) return [];
   const profile = result.stdout.trim();
-  if (await appendPathSnippet(profile, powerShellPathSnippet(target))) {
-    console.log("Added LES to PowerShell profile " + profile + ". Open a new terminal to use `les`.");
-  }
+  return await appendPathSnippet(profile, powerShellPathSnippet(target)) ? [profile] : [];
 }
 
 async function configureWindowsPath(target) {
@@ -317,15 +311,17 @@ async function configureWindowsPath(target) {
   if (result.status !== 0) {
     throw new Error(result.error?.message || result.stderr?.trim() || "PowerShell could not update the user PATH.");
   }
-  if (result.stdout.trim() === "added") console.log("Added " + bin + " to the Windows user PATH. Open a new terminal to use `les`.");
+  return result.stdout.trim() === "added" ? ["the Windows user PATH"] : [];
 }
 
 async function configureCommandPath(target) {
   if (process.env.LES_DISABLE_PATH_SETUP === "1") return;
   try {
-    if (process.platform === "win32") await configureWindowsPath(target);
-    else await configurePosixPath(target);
-    await configurePowerShellPath(target);
+    const changed = [...process.platform === "win32" ? await configureWindowsPath(target) : await configurePosixPath(target), ...await configurePowerShellPath(target)];
+    if (changed.length) {
+      const reload = process.platform !== "win32" && changed.find((path) => path.endsWith("rc"));
+      console.log("Added LES to PATH in " + changed.join(", ") + ". " + (reload ? "Run `source " + reload + "` or open" : "Open") + " a new terminal to use `les`.");
+    }
   } catch (error) {
     const detail = process.platform === "win32"
       ? "Add " + resolve(join(target, "bin")) + " to the Windows user PATH manually."
@@ -443,7 +439,7 @@ async function installUser(target, replace) {
   await mkdir(dirname(target), { recursive: true });
   const existingInstall = await exists(target);
   if (existingInstall && !replace) throw new Error("Collision at " + target + ". Run the installer again to update LES.");
-  if (existingInstall && (await filesBelow(target)).length) await readManifest(target);
+  const previous = existingInstall && (await filesBelow(target)).length ? await readManifest(target) : undefined;
   const stage = await mkdtemp(join(dirname(target), "." + basename(target) + ".staging-"));
   await copyDistribution(stage);
   await createManifest(stage, "user");
@@ -462,7 +458,7 @@ async function installUser(target, replace) {
     if (await exists(stage)) await rm(stage, { recursive: true, force: true });
   }
   await configureCommandPath(target);
-  if (existingInstall) {
+  if (previous && (!versionParts(previous.packageVersion) || isNewer("1.1.2", previous.packageVersion))) {
     console.log("NOTICE: LES skill paths now use `skills/les-*`. Update existing repositories' LES-AGENT.md pointers to `~/.les-agents/skills/les-bootstrap/SKILL.md`.");
   }
 }
