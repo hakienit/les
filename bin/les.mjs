@@ -921,6 +921,17 @@ async function lint(files) {
 
 const guardSettings = ".claude/settings.local.json";
 
+// Keep personal settings out of `git status` without touching tracked files; skipped outside a git repo.
+async function excludeLocally(entry) {
+  const found = spawnSync("git", ["rev-parse", "--git-path", "info/exclude"], { encoding: "utf8" });
+  if (found.status !== 0) return;
+  const path = resolve(found.stdout.trim());
+  const current = await exists(path) ? await readFile(path, "utf8") : "";
+  if (current.split(/\r?\n/u).includes(entry)) return;
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, current + (current && !current.endsWith("\n") ? "\n" : "") + entry + "\n");
+}
+
 async function guard(root, enabled, options) {
   const script = join(root, "adapters", "claude-code", "guard.mjs");
   if (enabled && !await exists(script)) throw new Error("Guard script is missing: " + script);
@@ -939,6 +950,7 @@ async function guard(root, enabled, options) {
   if (!Object.keys(settings.hooks).length) delete settings.hooks;
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(settings, null, 2) + "\n");
+  if (enabled) await excludeLocally(guardSettings);
   console.log("Guard " + (enabled ? "enabled" : "disabled") + " for Claude Code in " + guardSettings + ".");
 }
 

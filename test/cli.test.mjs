@@ -430,6 +430,7 @@ test("guard on and off merge into settings.local.json without touching other hoo
   try {
     const env = { LES_HOME: home };
     assert.equal(run([], project, env).status, 0);
+    execFileSync("git", ["init", "-q"], { cwd: project });
     const settings = join(project, ".claude", "settings.local.json");
     await mkdir(join(project, ".claude"), { recursive: true });
     const other = { matcher: "Edit", hooks: [{ type: "command", command: "true" }] };
@@ -442,6 +443,9 @@ test("guard on and off merge into settings.local.json without touching other hoo
     const on = JSON.parse(await readFile(settings, "utf8"));
     assert.equal(on.hooks.PreToolUse.length, 2);
     assert.deepEqual(on.permissions, { allow: ["Bash(ls)"] });
+    const exclude = (await readFile(join(project, ".git", "info", "exclude"), "utf8")).split("\n");
+    assert.equal(exclude.filter((line) => line === ".claude/settings.local.json").length, 1);
+    assert.equal(execFileSync("git", ["status", "--short"], { cwd: project, encoding: "utf8" }).includes(".claude"), false);
     assert.equal(on.hooks.PreToolUse[1].hooks[0].command, `node "${join(home, "adapters", "claude-code", "guard.mjs")}"`);
 
     assert.equal(run(["guard", "off"], project, env).status, 0);
