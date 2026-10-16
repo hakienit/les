@@ -1,6 +1,6 @@
 {
   "name": "@hakienit/les",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Living Engineering System distribution and installer",
   "license": "MIT",
   "type": "module",

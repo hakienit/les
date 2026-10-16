@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 - 2026-10-16
+
+- `les guard on` now adds `.claude/settings.local.json` to the repository's `.git/info/exclude`, so the personal hook file does not show up in `git status`. It is skipped outside a git repository.
+- Rewrite `README.md` as a landing page: why LES, quick start, how it works, commands, and safety nets, with installer and legacy details collapsed.
+
 ## 1.2.0 - 2026-10-16
 
 - Add `les lint FILE...` to flag placeholders, unmeasurable or unverifiable acceptance criteria, and files with no acceptance section.
