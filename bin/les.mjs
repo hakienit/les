@@ -43,6 +43,7 @@ Usage:
                               (no names: pick from detected CLIs; --all: every detected CLI)
   les init                    create LES-AGENT.md only
   les on [provider]           enable one or all configured providers
+  les lint FILE...            flag placeholders and unverifiable acceptance criteria
   les off [provider]          disable one or all providers
   les doctor                  show install, routing, and update status
   les add --scope repo        legacy: copy Markdown payload into a repo
@@ -67,7 +68,7 @@ function parseArgs(argv) {
   const providers = [];
   for (let index = 0; index < rest.length; index += 1) {
     const value = rest[index];
-    if (command === "connect" && !value.startsWith("-")) {
+    if (["connect", "lint"].includes(command) && !value.startsWith("-")) {
       providers.push(value);
       continue;
     }
@@ -99,9 +100,9 @@ function parseArgs(argv) {
       throw new Error("Unknown option: " + value);
     }
   }
-  if (!["install", "add", "init", "update", "rollback", "doctor", "diff", "adapter", "active", "connect", "on", "off"].includes(command)) {
+  if (!["install", "add", "init", "update", "rollback", "doctor", "diff", "adapter", "active", "connect", "lint", "on", "off"].includes(command)) {
     usage();
-    throw new Error("Choose install, init, connect, active, on, off, doctor, or a legacy add/update command.");
+    throw new Error("Choose install, init, connect, lint, active, on, off, doctor, or a legacy add/update command.");
   }
   if (!["repo", "user", "global"].includes(options.scope)) throw new Error("--scope must be repo, user, or global.");
   if (["init", "connect", "active", "on", "off"].includes(command) && options.scope !== "repo") {
@@ -110,7 +111,8 @@ function parseArgs(argv) {
   if (["adapter", "active"].includes(command) && !provider) {
     throw new Error(command + " requires codex, claude-code, gemini-cli, or antigravity.");
   }
-  for (const name of providers) if (!supportedProviders.some((entry) => entry.name === name)) throw new Error("Unknown provider: " + name);
+  if (command === "lint" && !providers.length) throw new Error("lint requires at least one Markdown file.");
+  if (command !== "lint") for (const name of providers) if (!supportedProviders.some((entry) => entry.name === name)) throw new Error("Unknown provider: " + name);
   return { command, options, provider, providers };
 }
 
@@ -875,6 +877,46 @@ async function latestVersion(installed) {
   return latest;
 }
 
+const placeholderPattern = /\b(?:TBD|TBC|TODO|FIXME|XXX)\b|\?\?\?|\bto be (?:decided|determined)\b/iu;
+const vaguePattern = /\b(?:fast|quick(?:ly)?|easy|easily|simple|user-friendly|intuitive|robust|seamless(?:ly)?|properly|appropriate(?:ly)?|reasonable|efficient(?:ly)?|good|nice|better|as needed|etc\.?|and so on)\b/iu;
+const observablePattern = /\d|`|["“]|\b(?:returns?|shows?|prints?|exits?|fails?|rejects?|emits?|writes?|creates?|contains?|equals?|matches|status|error|passes|blocks?|displays?|renders?|logs?|lists?)\b/iu;
+
+function lintSource(source) {
+  const findings = [];
+  let fenced = false;
+  let inCriteria = false;
+  let sawCriteria = false;
+  source.split(/\r?\n/u).forEach((line, index) => {
+    if (/^\s*(?:```|~~~)/u.test(line)) fenced = !fenced;
+    if (fenced || /^\s*(?:```|~~~)/u.test(line)) return;
+    const at = index + 1;
+    const heading = line.match(/^#{1,6}\s+(.*)/u)?.[1];
+    if (heading !== undefined) {
+      inCriteria = /accept|criteria|done when|definition of done|success/iu.test(heading);
+      sawCriteria ||= inCriteria;
+    }
+    if (placeholderPattern.test(line)) findings.push({ at, kind: "placeholder", text: line.trim() });
+    if (!inCriteria || !/^\s*(?:[-*+]|\d+[.)])\s+/u.test(line)) return;
+    const vague = line.match(vaguePattern)?.[0];
+    if (vague) findings.push({ at, kind: "vague", text: "\"" + vague + "\" is not measurable: " + line.trim() });
+    else if (!observablePattern.test(line)) findings.push({ at, kind: "unverifiable", text: "no observable check: " + line.trim() });
+  });
+  if (!sawCriteria) findings.push({ at: 1, kind: "missing", text: "no acceptance criteria section" });
+  return findings;
+}
+
+async function lint(files) {
+  let count = 0;
+  for (const file of files) {
+    for (const { at, kind, text } of lintSource(await readFile(file, "utf8"))) {
+      console.log(file + ":" + at + ": [" + kind + "] " + text);
+      count += 1;
+    }
+  }
+  console.log(count ? count + " finding(s)." : "No findings.");
+  return count ? 1 : 0;
+}
+
 async function doctor() {
   const root = userRoot();
   const statuses = [];
@@ -969,6 +1011,8 @@ try {
     await init(options);
   } else if (command === "connect") {
     await connect(options, providers);
+  } else if (command === "lint") {
+    process.exitCode = await lint(providers);
   } else if (command === "update") {
     await update(target, options);
   } else if (command === "rollback") {

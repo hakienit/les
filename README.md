@@ -66,6 +66,18 @@ The provider state is stored in the managed comment inside `LES-AGENT.md`, so
 there is no extra repo-local state file. `les active <provider>` remains a
 legacy compatibility alias for directly enabling one provider.
 
+## Lint a spec
+
+~~~sh
+les lint docs/specs/my-feature.md
+~~~
+
+`les lint` reads Markdown files and reports placeholders (`TBD`, `TODO`),
+acceptance criteria that use unmeasurable words ("fast", "works properly"),
+criteria with no observable check, and files with no acceptance section. It
+exits 1 when it finds anything. It is a heuristic aid for `les-specification`,
+not a replacement for review.
+
 ## Updates and status
 
 No repository needs to be initialized again after an update. Every initialized

@@ -379,3 +379,25 @@ test("skill catalog exposes the approved operational entrypoints", async () => {
   assert.deepEqual(names.sort(), expected);
   for (const workflow of inventory.workflows) assert.ok(loaded.has(workflow), "orphan workflow: " + workflow);
 });
+
+test("lint flags placeholders and acceptance criteria without an observable check", async () => {
+  const project = await mkdtemp(join(tmpdir(), "les-cli-lint-"));
+  try {
+    await writeFile(join(project, "bad.md"), "# Spec\n\nTBD owner.\n\n## Acceptance criteria\n\n- The page loads fast.\n- It works for users.\n- `les lint` exits 1 on a finding.\n\n```\nTODO in code is ignored\n```\n");
+    await writeFile(join(project, "good.md"), "# Spec\n\n## Done when\n\n1. `les doctor` returns exit code 0.\n");
+    await writeFile(join(project, "none.md"), "# Notes\n\nNothing here.\n");
+
+    const bad = run(["lint", "bad.md"], project);
+    assert.equal(bad.status, 1);
+    assert.match(bad.stdout, /bad\.md:3: \[placeholder\]/);
+    assert.match(bad.stdout, /bad\.md:7: \[vague\] "fast"/);
+    assert.match(bad.stdout, /bad\.md:8: \[unverifiable\]/);
+    assert.doesNotMatch(bad.stdout, /bad\.md:9/);
+    assert.doesNotMatch(bad.stdout, /bad\.md:12/);
+    assert.equal(run(["lint", "good.md"], project).status, 0);
+    assert.match(run(["lint", "none.md"], project).stdout, /\[missing\]/);
+    assert.notEqual(run(["lint"], project).status, 0);
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
