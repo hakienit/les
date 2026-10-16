@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // LES guard: a Claude Code PreToolUse hook. Reads the tool call as JSON on stdin and
 // exits 2 with a reason on stderr to block it. Enable with `les guard on`.
-import { homedir } from "node:os";
-import { resolve } from "node:path";
+// `guard.mjs session-start` is the matching SessionStart hook; it prints the bootstrap reminder.
+import { appendFileSync, existsSync, readFileSync, rmSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const secretPath = /(?:^|[\\/])(?:\.env(?!\.(?:example|sample|template)\b)[\w.-]*|\.ssh[\\/][^\s]*|id_(?:rsa|dsa|ecdsa|ed25519)|\.aws[\\/]credentials|\.netrc|[\w.-]+\.pem)$/u;
@@ -49,15 +51,59 @@ export function check(call, project = process.cwd()) {
   return undefined;
 }
 
+// Files the bootstrap requires: the adapter, the bootstrap skill, and everything its `loads` front matter lists.
+export function required() {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const skill = resolve(root, "skills", "les-bootstrap", "SKILL.md");
+  try {
+    const loads = JSON.parse(/^loads: (\[.*\])$/mu.exec(readFileSync(skill, "utf8"))[1]);
+    return [resolve(root, "adapters", "claude-code", "CLAUDE.md"), skill, ...loads.map((path) => resolve(dirname(skill), path))];
+  } catch { return []; } // ponytail: unreadable bootstrap fails open so the guard never locks the agent out
+}
+
+// Per-session record of which required files were Read; edits and shell calls stay blocked until all are present.
+const readLog = (id) => join(tmpdir(), "les-bootstrap-" + String(id).replace(/[^\w-]/gu, "_"));
+const gated = new Set(["Bash", "Edit", "Write", "MultiEdit", "NotebookEdit"]);
+
+export function gate(call) {
+  if (!call.session_id) return undefined;
+  const log = readLog(call.session_id);
+  if (call.tool_name === "Read") {
+    appendFileSync(log, resolve(String(call.tool_input?.file_path || "")) + "\n");
+    return undefined;
+  }
+  if (!gated.has(call.tool_name)) return undefined;
+  const seen = existsSync(log) ? readFileSync(log, "utf8").split("\n") : [];
+  const missing = required().filter((file) => !seen.includes(file));
+  return missing.length ? "LES bootstrap is not fully read in this session. Read these files with the Read tool first: " + missing.join(", ") : undefined;
+}
+
+// SessionStart hook: stdout becomes session context. It also resets the read log, since /clear, resume, and compaction drop the files from context.
+export function sessionStart(id) {
+  if (id) rmSync(readLog(id), { force: true });
+  return "LES is active. Before any work in this session, read every file in this list with the Read tool, even when a handoff or plan looks complete: " + required().join(", ") + ". Edit, Write, and Bash calls are blocked until you do. "
+    + "Before editing: state context trace, risk, and acceptance. Write the test before the code. Review the final diff. End every task-scoped reply with the LES status footer from policies/workflow-contracts.md.";
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   let raw = "";
   process.stdin.setEncoding("utf8");
   for await (const chunk of process.stdin) raw += chunk;
   let call;
-  try { call = JSON.parse(raw); } catch { process.exit(0); }
+  try { call = JSON.parse(raw); } catch { call = undefined; }
+  if (process.argv[2] === "session-start") {
+    console.log(sessionStart(call?.session_id));
+    process.exit(0);
+  }
+  if (!call) process.exit(0);
   const reason = check(call, resolve(process.env.CLAUDE_PROJECT_DIR || call.cwd || process.cwd()));
   if (reason) {
     console.error("LES guard blocked this call: " + reason + ". Ask the user to run it or approve it explicitly.");
+    process.exit(2);
+  }
+  const missing = gate(call);
+  if (missing) {
+    console.error("LES guard blocked this call: " + missing);
     process.exit(2);
   }
 }

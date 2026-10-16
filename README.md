@@ -128,8 +128,17 @@ settings file, and lists that file in `.git/info/exclude` so it stays out of
 - force pushes to `main`, `master`, `trunk`, `develop`, `release*`, or with no
   branch named.
 
+It also enforces the bootstrap. A `SessionStart` hook (startup, resume, `/clear`,
+compact) resets a per-session read log and tells the agent to read the adapter,
+`les-bootstrap`, and every file the bootstrap `loads`. Until each one has been
+read with the Read tool, `Edit`, `Write`, and `Bash` calls are blocked and the
+block names the missing files. The hook also tells the agent to state context
+trace, risk, and acceptance before editing, write the test first, and end with
+the status footer; those parts are reminders, not blocks. If the bootstrap
+cannot be read, the gate stays open.
+
 Other hooks and settings are preserved, and `les guard off` removes only the
-LES entry. The guard catches common mistakes through pattern matching. It is
+LES entries. The guard catches common mistakes through pattern matching. It is
 not a sandbox, and a determined command can still get around it.
 
 ### Lint a spec

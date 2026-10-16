@@ -424,6 +424,45 @@ test("guard blocks secret reads, deletes outside the project, and protected forc
   assert.equal(spawnSync(process.execPath, [guardScript], { input: "not json" }).status, 0);
 });
 
+test("guard blocks Edit, Write, and Bash until every bootstrap file is read in the session, and again after session-start", async () => {
+  const project = "/work/app";
+  const session_id = "les-gate-" + process.pid;
+  const call = (extra) => guardRun({ session_id, ...extra }, project).status;
+  const edit = { tool_name: "Edit", tool_input: { file_path: "/work/app/a.ts" } };
+  const readOf = (file_path) => ({ tool_name: "Read", tool_input: { file_path } });
+  const reset = () => spawnSync(process.execPath, [guardScript, "session-start"], { input: JSON.stringify({ session_id }) });
+  const skill = join(root, "skills", "les-bootstrap", "SKILL.md");
+  const loads = JSON.parse(/^loads: (\[.*\])$/mu.exec(await readFile(skill, "utf8"))[1]);
+  const required = [join(root, "adapters", "claude-code", "CLAUDE.md"), skill, ...loads.map((path) => resolve(root, "skills", "les-bootstrap", path))];
+  const readAll = () => required.forEach((file) => assert.equal(call(readOf(file)), 0));
+  reset();
+  assert.equal(call(edit), 2);
+  assert.equal(call(bash("ls")), 2);
+  assert.equal(call({ tool_name: "Write", tool_input: { file_path: "/work/app/b.ts" } }), 2);
+  assert.equal(call(readOf("/work/app/src/index.ts")), 0);
+  assert.equal(call(edit), 2);
+  for (const file of required.slice(0, -1)) assert.equal(call(readOf(file)), 0);
+  const blocked = guardRun({ session_id, ...edit }, project);
+  assert.equal(blocked.status, 2);
+  assert.ok(blocked.stderr.includes(required.at(-1)), blocked.stderr);
+  assert.equal(call(readOf(required.at(-1))), 0);
+  assert.equal(call(edit), 0);
+  assert.equal(call(bash("ls")), 0);
+  reset();
+  assert.equal(call(edit), 2);
+  readAll();
+  assert.equal(call(edit), 0);
+  assert.equal(guardRun(edit, project).status, 0);
+  reset();
+});
+
+test("guard session-start tells the agent to read the adapter and bootstrap", () => {
+  const out = spawnSync(process.execPath, [guardScript, "session-start"], { encoding: "utf8" });
+  assert.equal(out.status, 0);
+  assert.ok(out.stdout.includes(join(root, "skills", "les-bootstrap", "SKILL.md")));
+  assert.ok(out.stdout.includes("status footer"));
+});
+
 test("guard on and off merge into settings.local.json without touching other hooks", async () => {
   const project = await mkdtemp(join(tmpdir(), "les-cli-guard-"));
   const home = await mkdtemp(join(tmpdir(), "les-cli-guard-home-"));
@@ -447,9 +486,13 @@ test("guard on and off merge into settings.local.json without touching other hoo
     assert.equal(exclude.filter((line) => line === ".claude/settings.local.json").length, 1);
     assert.equal(execFileSync("git", ["status", "--short"], { cwd: project, encoding: "utf8" }).includes(".claude"), false);
     assert.equal(on.hooks.PreToolUse[1].hooks[0].command, `node "${join(home, "adapters", "claude-code", "guard.mjs")}"`);
+    assert.equal(on.hooks.SessionStart.length, 1);
+    assert.equal(on.hooks.SessionStart[0].hooks[0].command, `node "${join(home, "adapters", "claude-code", "guard.mjs")}" session-start`);
 
     assert.equal(run(["guard", "off"], project, env).status, 0);
-    assert.deepEqual(JSON.parse(await readFile(settings, "utf8")).hooks.PreToolUse, [other]);
+    const off = JSON.parse(await readFile(settings, "utf8"));
+    assert.deepEqual(off.hooks.PreToolUse, [other]);
+    assert.equal(off.hooks.SessionStart, undefined);
     assert.notEqual(run(["guard"], project, env).status, 0);
     await writeFile(settings, "{ nope");
     assert.notEqual(run(["guard", "on"], project, env).status, 0);

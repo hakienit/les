@@ -940,13 +940,20 @@ async function guard(root, enabled, options) {
   if (await exists(path)) {
     try { settings = JSON.parse(await readFile(path, "utf8")); } catch { throw new Error(guardSettings + " is not valid JSON; fix it before running les guard."); }
   }
-  const isGuard = (entry) => entry?.hooks?.some((hook) => String(hook.command).endsWith("adapters/claude-code/guard.mjs\""));
-  const rest = (settings.hooks?.PreToolUse || []).filter((entry) => !isGuard(entry));
-  const entry = { matcher: "Bash|Read", hooks: [{ type: "command", command: "node \"" + script + "\"" }] };
-  printPlan("guard " + (enabled ? "on" : "off"), path, [enabled ? "block risky Bash and Read calls with " + script : "remove the LES guard hook"]);
+  const isGuard = (entry) => entry?.hooks?.some((hook) => /adapters\/claude-code\/guard\.mjs"/u.test(String(hook.command)));
+  const command = "node \"" + script + "\"";
+  const entries = {
+    PreToolUse: { matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", hooks: [{ type: "command", command }] },
+    SessionStart: { matcher: "startup|resume|clear|compact", hooks: [{ type: "command", command: command + " session-start" }] }
+  };
+  printPlan("guard " + (enabled ? "on" : "off"), path, [enabled ? "block risky calls, and block Edit, Write, and Bash until the LES bootstrap files are read each session, with " + script : "remove the LES guard hooks"]);
   if (options.dryRun) return;
-  settings.hooks = { ...settings.hooks, PreToolUse: enabled ? [...rest, entry] : rest };
-  if (!settings.hooks.PreToolUse.length) delete settings.hooks.PreToolUse;
+  settings.hooks = { ...settings.hooks };
+  for (const [event, entry] of Object.entries(entries)) {
+    const rest = (settings.hooks[event] || []).filter((existing) => !isGuard(existing));
+    settings.hooks[event] = enabled ? [...rest, entry] : rest;
+    if (!settings.hooks[event].length) delete settings.hooks[event];
+  }
   if (!Object.keys(settings.hooks).length) delete settings.hooks;
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(settings, null, 2) + "\n");
