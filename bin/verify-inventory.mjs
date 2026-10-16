@@ -125,7 +125,7 @@ if (await access(join(root, "test")).then(() => true, () => false)) {
 }
 
 const forbiddenFields = ["prove" + "nance", "source" + "Revision", "source" + "Repository"];
-const forbidden = new RegExp("\\b(?:" + forbiddenFields.join("|") + ")\\b|https?:\\/\\/(?!github\\.com\\/hakienit\\/les|registry\\.npmjs\\.org\\/@hakienit\\/les)", "iu");
+const forbidden = new RegExp("\\b(?:" + forbiddenFields.join("|") + ")\\b|https?:\\/\\/(?!github\\.com\\/hakienit\\/les|registry\\.npmjs\\.org\\/@hakienit\\/les|img\\.shields\\.io\\/npm\\/dm\\/@hakienit\\/les|www\\.npmjs\\.com\\/package\\/@hakienit\\/les)", "iu");
 for (const path of declared) {
   if (path === "LICENSE") continue;
   const source = await readFile(join(root, path), "utf8");

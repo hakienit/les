@@ -3,7 +3,8 @@
 ## 1.2.1 - 2026-10-16
 
 - `les guard on` now adds `.claude/settings.local.json` to the repository's `.git/info/exclude`, so the personal hook file does not show up in `git status`. It is skipped outside a git repository.
-- Rewrite `README.md` as a landing page: why LES, quick start, how it works, commands, and safety nets, with installer and legacy details collapsed.
+- Rewrite `README.md` as a landing page with a banner, an npm downloads badge, a flow diagram, a command reference, and the safety nets, with installer and legacy details collapsed.
+- Let `verify-inventory` accept only the npm downloads badge and npm package page URLs for `@hakienit/les` in public files.
 
 ## 1.2.0 - 2026-10-16
 

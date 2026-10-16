@@ -1,3 +1,11 @@
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="LES: Living Engineering System" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@hakienit/les"><img src="https://img.shields.io/npm/dm/@hakienit/les" alt="npm downloads per month"></a>
+</p>
+
 # LES: Living Engineering System
 
 **A provider-neutral engineering methodology for human-directed AI delivery.**
@@ -58,14 +66,9 @@ setup any time with `les doctor`.
 
 ## How it works
 
-~~~text
-your request
-   -> provider pointer (AGENTS.md, CLAUDE.md, GEMINI.md, or agent.md)
-   -> LES-AGENT.md
-   -> bootstrap: precedence, route, risk, profile, verification tier
-   -> one skill, with only the rules and workflows it activates
-   -> evidence and a terminal status
-~~~
+<p align="center">
+  <img src="docs/assets/flow.svg" alt="A request passes through the provider pointer, LES-AGENT.md, the bootstrap, and one skill. R2 and R3 work waits at an approval gate. The work is done and verified, looping back to fix defects, and ends in a terminal status that returns to the human." width="100%">
+</p>
 
 | Layer | Role |
 | --- | --- |
