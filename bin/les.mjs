@@ -39,9 +39,9 @@ function usage() {
 
 Usage:
   les                         install or update ~/.les-agents
-  les init                    create LES-AGENT.md in the current repo
-  les connect                 connect one or more installed provider CLIs
-  les active <provider>       legacy alias for directly enabling one provider
+  les connect [provider...]   set up this repo: create LES-AGENT.md, enable providers
+                              (no names: pick from detected CLIs; --all: every detected CLI)
+  les init                    create LES-AGENT.md only
   les on [provider]           enable one or all configured providers
   les off [provider]          disable one or all providers
   les doctor                  show install, routing, and update status
@@ -51,7 +51,7 @@ Usage:
   les rollback --backup PATH  legacy: restore a prior repo update backup
 
 Providers: codex, claude-code, gemini-cli, antigravity
-Options: --root PATH, --scope repo|user|global, --dry-run
+Options: --all, --dry-run (legacy repo commands also take --root, --scope)
 
 Install from npm:
   npx -y @hakienit/les
@@ -64,8 +64,13 @@ function parseArgs(argv) {
   const [command, ...rest] = argv;
   const options = { scope: "repo", root: ".les-agents", dryRun: false, backup: undefined };
   let provider;
+  const providers = [];
   for (let index = 0; index < rest.length; index += 1) {
     const value = rest[index];
+    if (command === "connect" && !value.startsWith("-")) {
+      providers.push(value);
+      continue;
+    }
     if (["adapter", "active", "on", "off"].includes(command) && !provider && !value.startsWith("-")) {
       provider = value;
       continue;
@@ -80,6 +85,8 @@ function parseArgs(argv) {
       options.root = value.slice("--root=".length);
     } else if (value === "--dry-run") {
       options.dryRun = true;
+    } else if (value === "--all") {
+      options.all = true;
     } else if (value === "--backup") {
       options.backup = rest[++index];
     } else if (value === "--version") {
@@ -103,7 +110,8 @@ function parseArgs(argv) {
   if (["adapter", "active"].includes(command) && !provider) {
     throw new Error(command + " requires codex, claude-code, gemini-cli, or antigravity.");
   }
-  return { command, options, provider };
+  for (const name of providers) if (!supportedProviders.some((entry) => entry.name === name)) throw new Error("Unknown provider: " + name);
+  return { command, options, provider, providers };
 }
 
 function targetFor(scope, root = ".les-agents") {
@@ -751,13 +759,12 @@ async function selectProviders(title, providers, initial = [], required = false)
   });
 }
 
-async function connect(options) {
+async function connect(options, requested) {
   const root = await requireUserStore();
-  const state = await readAgentState();
-  const providers = availableProviders();
-  if (!providers.length) throw new Error("No supported provider CLI found on PATH. Supported: " + supportedProviders.map(({ name }) => name).join(", ") + ".");
-  const selected = await selectProviders("Select provider CLIs to connect", providers, [], true);
-  const defaultOn = await selectProviders("Select provider CLIs to default on", selected, selected);
+  const state = await exists(localAgentPath()) ? await readAgentState() : initialState();
+  const detected = availableProviders();
+  if (!requested.length && !detected.length) throw new Error("No supported provider CLI found on PATH. Supported: " + supportedProviders.map(({ name }) => name).join(", ") + ".");
+  const selected = requested.length ? requested : options.all ? detected : await selectProviders("Select provider CLIs to connect", detected, detected, true);
   const plans = [];
   for (const provider of selected) {
     const source = adapterSourceFor(root, provider);
@@ -766,29 +773,20 @@ async function connect(options) {
     const pointer = adapterPointer(provider, localPointerSource(entry));
     const current = await exists(entry) ? await readFile(entry, "utf8") : undefined;
     if (current !== undefined && current !== pointer) throw new Error("Collision at " + entry + ". Add this pointer manually:\n" + pointer);
-    plans.push({ provider, entry, pointer, current });
+    plans.push({ entry, pointer, current });
   }
-  printPlan("connect", localAgentPath(), selected.map((provider) => (defaultOn.includes(provider) ? provider + " (default on)" : provider)));
+  printPlan("connect", localAgentPath(), selected);
   if (options.dryRun) return;
-  const defaults = new Set(defaultOn);
-  for (const { entry, pointer, current, provider } of plans) {
-    if (defaults.has(provider)) {
-      if (current === undefined) {
-        await mkdir(dirname(entry), { recursive: true });
-        await writeFile(entry, pointer);
-      }
-    } else if (current !== undefined) {
-      await rm(entry);
+  for (const { entry, pointer, current } of plans) {
+    if (current === undefined) {
+      await mkdir(dirname(entry), { recursive: true });
+      await writeFile(entry, pointer);
     }
   }
   state.configuredProviders = [...new Set([...state.configuredProviders, ...selected])].sort();
-  state.activeProviders = [...new Set([
-    ...state.activeProviders.filter((provider) => !selected.includes(provider)),
-    ...defaultOn
-  ])].sort();
+  state.activeProviders = [...new Set([...state.activeProviders, ...selected])].sort();
   await writeAgentState(state);
   console.log("Connected " + selected.join(", ") + ".");
-  console.log("Default on: " + (defaultOn.join(", ") || "none") + ".");
 }
 
 async function setAllAdapters(options, enabled) {
@@ -821,6 +819,24 @@ async function nearestExisting(path) {
 function doctorLine(status, name, detail) {
   console.log("[" + status + "] " + name + ": " + detail);
   return status;
+}
+
+async function storeDrift(root, manifest) {
+  const drift = [];
+  for (const entry of manifest.managed) {
+    const path = join(root, entry.path);
+    if (!await exists(path)) drift.push("missing " + entry.path);
+    else if (await sha256(path) !== entry.sha256) drift.push("changed " + entry.path);
+  }
+  return drift;
+}
+
+async function missingPointers(root, source) {
+  const missing = [];
+  for (const [, path] of source.matchAll(/~\/\.les-agents\/([^\s`]+)/gu)) {
+    if (!await exists(join(root, path))) missing.push(path);
+  }
+  return missing;
 }
 
 function versionParts(version) {
@@ -874,6 +890,12 @@ async function doctor() {
   } catch {
     statuses.push(doctorLine("PENDING_USER_ACTION", "installation", "run npx -y @hakienit/les"));
   }
+  if (manifest) {
+    const drift = await storeDrift(root, manifest);
+    statuses.push(drift.length
+      ? doctorLine("PENDING_USER_ACTION", "store-integrity", drift.length + " managed file(s) differ: " + drift.slice(0, 3).join(", ") + "; run npx -y @hakienit/les")
+      : doctorLine("READY", "store-integrity", manifest.managed.length + " managed files match the manifest"));
+  }
   statuses.push(doctorLine(await exists(join(root, "policies", "README.md")) ? "READY" : "BLOCKED", "les-policies", "canonical policy kernel"));
   statuses.push(doctorLine(await exists(join(root, "inventory.yaml")) ? "READY" : "BLOCKED", "inventory", "public contract inventory"));
   statuses.push(doctorLine(Number(process.versions.node.split(".")[0]) >= 20 ? "READY" : "BLOCKED", "node", process.version + " (requires >=20)"));
@@ -888,6 +910,10 @@ async function doctor() {
     try {
       const state = await readAgentState();
       statuses.push(doctorLine("READY", "repository", "LES-AGENT.md; active: " + (state.activeProviders.join(", ") || "none")));
+      const missing = await missingPointers(root, await readFile(agent, "utf8"));
+      statuses.push(missing.length
+        ? doctorLine("PENDING_USER_ACTION", "bootstrap-pointer", "LES-AGENT.md points to missing ~/.les-agents/" + missing.join(", ") + "; update the pointer")
+        : doctorLine("READY", "bootstrap-pointer", "LES-AGENT.md pointers resolve in the user store"));
     } catch {
       statuses.push(doctorLine("BLOCKED", "repository", "LES-AGENT.md is not LES-managed"));
     }
@@ -933,7 +959,7 @@ try {
     usage();
     process.exit(0);
   }
-  const { command, options, provider } = parseArgs(argv.length ? argv : ["install", "--scope", "user"]);
+  const { command, options, provider, providers } = parseArgs(argv.length ? argv : ["install", "--scope", "user"]);
   const target = targetFor(options.scope, options.root);
   if (command === "install") {
     if (options.scope === "repo") throw new Error("install is user-local; omit --scope or use --scope user.");
@@ -947,7 +973,7 @@ try {
   } else if (command === "init") {
     await init(options);
   } else if (command === "connect") {
-    await connect(options);
+    await connect(options, providers);
   } else if (command === "update") {
     await update(target, options);
   } else if (command === "rollback") {

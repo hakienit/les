@@ -24,27 +24,22 @@ change its parent shell's PATH. It does not write to `~/.agents`, `~/.codex`,
 The user store intentionally contains the package source. Repositories never
 receive that source tree.
 
-## Initialize a repository
+## Set up a repository
 
 ~~~sh
 cd my-project
-les init
 les connect
 ~~~
 
-`les init` creates one tracked Markdown entrypoint:
+`les connect` creates one tracked Markdown entrypoint, `LES-AGENT.md`, that
+points the AI CLI to `~/.les-agents`. It detects the supported AI CLIs installed
+on the machine, preselects them all, and enables the ones you confirm with
+Space and Enter. Skip the prompt with `les connect --all` or name providers:
+`les connect codex claude-code`. Turn a provider off or on later with
+`les off <provider>` and `les on <provider>`. `les init` still creates
+`LES-AGENT.md` alone.
 
-~~~text
-LES-AGENT.md
-~~~
-
-It points the AI CLI to `~/.les-agents`. `les connect` detects the supported AI
-CLIs installed on the machine, lets you select one or more with Space and
-Enter, then lets you choose which connected providers are default-on. `Select
-all` is available in both steps. A connected provider that is not default-on
-can be enabled later with `les on <provider>`.
-
-LES creates a small native pointer to `LES-AGENT.md` for each default-on
+LES creates a small native pointer to `LES-AGENT.md` for each enabled
 provider:
 
 | Provider | Pointer |

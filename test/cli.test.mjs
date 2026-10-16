@@ -116,6 +116,20 @@ test("user install, repo init, routing, and cached update notice work without re
     assert.equal(run(["init"], project, env).status, 0);
     assert.equal(run(["doctor"], project, { ...env, LES_UPDATE_CHECK: "1", LES_LATEST_VERSION: "9.9.9" }).status, 0);
     assert.match(run(["doctor"], project, { ...env, LES_UPDATE_CHECK: "1", LES_LATEST_VERSION: "9.9.9" }).stdout, /UPDATE_AVAILABLE.*les/);
+    const healthy = run(["doctor"], project, env).stdout;
+    assert.match(healthy, /\[READY\] store-integrity/);
+    assert.match(healthy, /\[READY\] bootstrap-pointer/);
+    const agentSource = await readFile(join(project, "LES-AGENT.md"), "utf8");
+    await writeFile(join(project, "LES-AGENT.md"), agentSource.replace("skills/les-bootstrap", "skills/bootstrap"));
+    const stalePointer = run(["doctor"], project, env);
+    assert.equal(stalePointer.status, 1);
+    assert.match(stalePointer.stdout, /\[PENDING_USER_ACTION\] bootstrap-pointer.*skills\/bootstrap\/SKILL\.md/);
+    await writeFile(join(project, "LES-AGENT.md"), agentSource);
+    const policy = join(home, "policies", "principles.md");
+    const original = await readFile(policy, "utf8");
+    await writeFile(policy, original + "drift\n");
+    assert.match(run(["doctor"], project, env).stdout, /\[PENDING_USER_ACTION\] store-integrity: 1 .*changed policies\/principles\.md/);
+    await writeFile(policy, original);
     await writeFile(join(home, "les-manifest.md"), (await readFile(join(home, "les-manifest.md"), "utf8")).replace(`"packageVersion": "${packageMetadata.version}"`, '"packageVersion": "1.0.0"'));
     await mkdir(join(cache, "les"), { recursive: true });
     await writeFile(join(cache, "les", "update-check.json"), JSON.stringify({ checkedAt: Date.now(), latestVersion: "1.0.0" }) + "\n");
@@ -190,19 +204,28 @@ test("connect discovers available CLIs and selects connected/default-on provider
     }
     const env = { LES_HOME: home, PATH: cliBin };
     assert.equal(run([], project, env).status, 0);
-    assert.equal(run(["init"], project, env).status, 0);
+    const stateOf = async () => JSON.parse((await readFile(join(project, "LES-AGENT.md"), "utf8"))
+      .match(/<!-- LES-MANAGED\n([\s\S]*?)\n-->/u)[1]);
+    const pointer = "# LES\n\n@./LES-AGENT.md\n";
 
-    const result = run(["connect"], project, env, " \r \x1b[B \r");
+    assert.equal(run(["connect", "--dry-run", "codex"], project, env).status, 0);
+    assert.equal(await access(join(project, "LES-AGENT.md")).then(() => true).catch(() => false), false);
+    assert.notEqual(run(["connect", "nope"], project, env).status, 0);
+
+    const result = run(["connect"], project, env, "\x1b[B \r");
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Select all/);
-    const state = JSON.parse((await readFile(join(project, "LES-AGENT.md"), "utf8"))
-      .match(/<!-- LES-MANAGED\n([\s\S]*?)\n-->/u)[1]);
-    assert.deepEqual(state.configuredProviders, ["codex", "gemini-cli"]);
-    assert.deepEqual(state.activeProviders, ["codex"]);
-    assert.equal(await readFile(join(project, "AGENTS.md"), "utf8"), "# LES\n\n@./LES-AGENT.md\n");
+    assert.deepEqual((await stateOf()).activeProviders, ["gemini-cli"]);
+    assert.equal(await readFile(join(project, "GEMINI.md"), "utf8"), pointer);
+    assert.equal(await access(join(project, "AGENTS.md")).then(() => true).catch(() => false), false);
+
+    assert.equal(run(["connect", "--all"], project, env).status, 0);
+    assert.deepEqual((await stateOf()).configuredProviders, ["codex", "gemini-cli"]);
+    assert.equal(await readFile(join(project, "AGENTS.md"), "utf8"), pointer);
+    assert.equal(run(["off", "gemini-cli"], project, env).status, 0);
     assert.equal(await access(join(project, "GEMINI.md")).then(() => true).catch(() => false), false);
     assert.equal(run(["on", "gemini-cli"], project, env).status, 0);
-    assert.equal(await readFile(join(project, "GEMINI.md"), "utf8"), "# LES\n\n@./LES-AGENT.md\n");
+    assert.equal(await readFile(join(project, "GEMINI.md"), "utf8"), pointer);
   } finally {
     await rm(project, { recursive: true, force: true });
     await rm(home, { recursive: true, force: true });
