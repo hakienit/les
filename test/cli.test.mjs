@@ -401,3 +401,57 @@ test("lint flags placeholders and acceptance criteria without an observable chec
     await rm(project, { recursive: true, force: true });
   }
 });
+
+const guardScript = join(root, "adapters", "claude-code", "guard.mjs");
+function guardRun(call, project) {
+  return spawnSync(process.execPath, [guardScript], { encoding: "utf8", input: JSON.stringify(call), env: { ...process.env, HOME: "/home/tester", CLAUDE_PROJECT_DIR: project } });
+}
+const bash = (command) => ({ tool_name: "Bash", tool_input: { command } });
+
+test("guard blocks secret reads, deletes outside the project, and protected force pushes", () => {
+  const project = "/work/app";
+  for (const call of [
+    bash("cat .env"), bash("grep KEY ~/.ssh/id_ed25519"), bash("FOO=1 head -n1 .env.local"),
+    { tool_name: "Read", tool_input: { file_path: "/work/app/.env" } },
+    bash("rm -rf /"), bash("rm -rf ~"), bash("rm -rf ../other"), bash("cd x && rm -rf $TARGET"), bash("find / -name x -delete"),
+    bash("git push --force origin main"), bash("git push -f"), bash("git push origin +master")
+  ]) assert.equal(guardRun(call, project).status, 2, JSON.stringify(call));
+  for (const call of [
+    bash("cat .env.example"), bash("echo .env >> .gitignore"), bash("rm -rf node_modules dist/*"), bash("rm ./tmp/a.txt"),
+    bash("git push origin feature/x"), bash("git push --force-with-lease origin feature/x"), bash("ls -la"),
+    { tool_name: "Read", tool_input: { file_path: "/work/app/src/index.ts" } }
+  ]) assert.equal(guardRun(call, project).status, 0, JSON.stringify(call));
+  assert.equal(spawnSync(process.execPath, [guardScript], { input: "not json" }).status, 0);
+});
+
+test("guard on and off merge into settings.local.json without touching other hooks", async () => {
+  const project = await mkdtemp(join(tmpdir(), "les-cli-guard-"));
+  const home = await mkdtemp(join(tmpdir(), "les-cli-guard-home-"));
+  try {
+    const env = { LES_HOME: home };
+    assert.equal(run([], project, env).status, 0);
+    const settings = join(project, ".claude", "settings.local.json");
+    await mkdir(join(project, ".claude"), { recursive: true });
+    const other = { matcher: "Edit", hooks: [{ type: "command", command: "true" }] };
+    await writeFile(settings, JSON.stringify({ permissions: { allow: ["Bash(ls)"] }, hooks: { PreToolUse: [other] } }));
+
+    assert.equal(run(["guard", "on", "--dry-run"], project, env).status, 0);
+    assert.deepEqual(JSON.parse(await readFile(settings, "utf8")).hooks.PreToolUse, [other]);
+    assert.equal(run(["guard", "on"], project, env).status, 0);
+    assert.equal(run(["guard", "on"], project, env).status, 0);
+    const on = JSON.parse(await readFile(settings, "utf8"));
+    assert.equal(on.hooks.PreToolUse.length, 2);
+    assert.deepEqual(on.permissions, { allow: ["Bash(ls)"] });
+    assert.equal(on.hooks.PreToolUse[1].hooks[0].command, `node "${join(home, "adapters", "claude-code", "guard.mjs")}"`);
+
+    assert.equal(run(["guard", "off"], project, env).status, 0);
+    assert.deepEqual(JSON.parse(await readFile(settings, "utf8")).hooks.PreToolUse, [other]);
+    assert.notEqual(run(["guard"], project, env).status, 0);
+    await writeFile(settings, "{ nope");
+    assert.notEqual(run(["guard", "on"], project, env).status, 0);
+    assert.equal(await readFile(settings, "utf8"), "{ nope");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+  }
+});

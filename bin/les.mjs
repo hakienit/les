@@ -43,6 +43,7 @@ Usage:
                               (no names: pick from detected CLIs; --all: every detected CLI)
   les init                    create LES-AGENT.md only
   les on [provider]           enable one or all configured providers
+  les guard on|off            block secret reads, deletes outside the repo, and force pushes (Claude Code)
   les lint FILE...            flag placeholders and unverifiable acceptance criteria
   les off [provider]          disable one or all providers
   les doctor                  show install, routing, and update status
@@ -68,7 +69,7 @@ function parseArgs(argv) {
   const providers = [];
   for (let index = 0; index < rest.length; index += 1) {
     const value = rest[index];
-    if (["connect", "lint"].includes(command) && !value.startsWith("-")) {
+    if (["connect", "lint", "guard"].includes(command) && !value.startsWith("-")) {
       providers.push(value);
       continue;
     }
@@ -100,9 +101,9 @@ function parseArgs(argv) {
       throw new Error("Unknown option: " + value);
     }
   }
-  if (!["install", "add", "init", "update", "rollback", "doctor", "diff", "adapter", "active", "connect", "lint", "on", "off"].includes(command)) {
+  if (!["install", "add", "init", "update", "rollback", "doctor", "diff", "adapter", "active", "connect", "lint", "guard", "on", "off"].includes(command)) {
     usage();
-    throw new Error("Choose install, init, connect, lint, active, on, off, doctor, or a legacy add/update command.");
+    throw new Error("Choose install, init, connect, lint, guard, active, on, off, doctor, or a legacy add/update command.");
   }
   if (!["repo", "user", "global"].includes(options.scope)) throw new Error("--scope must be repo, user, or global.");
   if (["init", "connect", "active", "on", "off"].includes(command) && options.scope !== "repo") {
@@ -112,7 +113,8 @@ function parseArgs(argv) {
     throw new Error(command + " requires codex, claude-code, gemini-cli, or antigravity.");
   }
   if (command === "lint" && !providers.length) throw new Error("lint requires at least one Markdown file.");
-  if (command !== "lint") for (const name of providers) if (!supportedProviders.some((entry) => entry.name === name)) throw new Error("Unknown provider: " + name);
+  if (command === "guard" && !(providers.length === 1 && ["on", "off"].includes(providers[0]))) throw new Error("guard requires on or off.");
+  if (!["lint", "guard"].includes(command)) for (const name of providers) if (!supportedProviders.some((entry) => entry.name === name)) throw new Error("Unknown provider: " + name);
   return { command, options, provider, providers };
 }
 
@@ -917,6 +919,29 @@ async function lint(files) {
   return count ? 1 : 0;
 }
 
+const guardSettings = ".claude/settings.local.json";
+
+async function guard(root, enabled, options) {
+  const script = join(root, "adapters", "claude-code", "guard.mjs");
+  if (enabled && !await exists(script)) throw new Error("Guard script is missing: " + script);
+  const path = join(process.cwd(), guardSettings);
+  let settings = {};
+  if (await exists(path)) {
+    try { settings = JSON.parse(await readFile(path, "utf8")); } catch { throw new Error(guardSettings + " is not valid JSON; fix it before running les guard."); }
+  }
+  const isGuard = (entry) => entry?.hooks?.some((hook) => String(hook.command).endsWith("adapters/claude-code/guard.mjs\""));
+  const rest = (settings.hooks?.PreToolUse || []).filter((entry) => !isGuard(entry));
+  const entry = { matcher: "Bash|Read", hooks: [{ type: "command", command: "node \"" + script + "\"" }] };
+  printPlan("guard " + (enabled ? "on" : "off"), path, [enabled ? "block risky Bash and Read calls with " + script : "remove the LES guard hook"]);
+  if (options.dryRun) return;
+  settings.hooks = { ...settings.hooks, PreToolUse: enabled ? [...rest, entry] : rest };
+  if (!settings.hooks.PreToolUse.length) delete settings.hooks.PreToolUse;
+  if (!Object.keys(settings.hooks).length) delete settings.hooks;
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, JSON.stringify(settings, null, 2) + "\n");
+  console.log("Guard " + (enabled ? "enabled" : "disabled") + " for Claude Code in " + guardSettings + ".");
+}
+
 async function doctor() {
   const root = userRoot();
   const statuses = [];
@@ -1011,6 +1036,8 @@ try {
     await init(options);
   } else if (command === "connect") {
     await connect(options, providers);
+  } else if (command === "guard") {
+    await guard(await requireUserStore(), providers[0] === "on", options);
   } else if (command === "lint") {
     process.exitCode = await lint(providers);
   } else if (command === "update") {

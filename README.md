@@ -66,6 +66,21 @@ The provider state is stored in the managed comment inside `LES-AGENT.md`, so
 there is no extra repo-local state file. `les active <provider>` remains a
 legacy compatibility alias for directly enabling one provider.
 
+## Guard risky commands (Claude Code)
+
+~~~sh
+les guard on
+~~~
+
+`les guard on` adds a `PreToolUse` hook to `.claude/settings.local.json` (your
+personal, normally untracked file) that blocks, before they run: reading
+`.env` files, SSH keys, and cloud credentials; `rm` or `find -delete` aimed
+outside the project, at `~`, or at `/`; and force pushes to `main`, `master`,
+`trunk`, `develop`, `release*`, or with no branch named. Other hooks and
+settings are preserved. `les guard off` removes only the LES entry. The guard
+is a safety net for common mistakes, not a sandbox: a determined command can
+still get around pattern matching.
+
 ## Lint a spec
 
 ~~~sh
