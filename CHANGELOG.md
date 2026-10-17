@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.1 - 2026-10-17
 
 - Fix Windows: `les connect` and `les doctor` now detect provider CLIs installed as npm `.cmd` shims, such as `codex` and `gemini`.
 - Fix Windows: `les guard off` removes the guard hooks, and `les guard on` no longer adds them twice.
