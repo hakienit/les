@@ -472,7 +472,7 @@ test("guard on and off merge into settings.local.json without touching other hoo
   const project = await mkdtemp(join(tmpdir(), "les-cli-guard-"));
   const home = await mkdtemp(join(tmpdir(), "les-cli-guard-home-"));
   try {
-    const env = { LES_HOME: home };
+    const env = { LES_HOME: home, LES_DISABLE_PATH_SETUP: "1" };
     assert.equal(run([], project, env).status, 0);
     execFileSync("git", ["init", "-q"], { cwd: project });
     const settings = join(project, ".claude", "settings.local.json");
