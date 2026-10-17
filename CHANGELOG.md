@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.2 - 2026-10-17
+
+- Trim `README.md` to a minimal landing page: install, why, commands, and update.
+
 ## 1.3.1 - 2026-10-17
 
 - Fix Windows: `les connect` and `les doctor` now detect provider CLIs installed as npm `.cmd` shims, such as `codex` and `gemini`.
