@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="520" viewBox="0 0 1280 520" role="img" aria-labelledby="title desc">
   <title id="title">How a task flows through LES</title>
-  <desc id="desc">A request passes through a provider pointer, LES-AGENT.md, the bootstrap, and one skill. R2 and R3 work stops at an approval gate. Work is done and verified, looping back to fix defects, and ends in a terminal status that returns to the human.</desc>
+  <desc id="desc">A request passes through a provider pointer, LES-AGENT.md, the bootstrap, and one skill. R3 work stops at an approval gate. Work is done and verified, looping back to fix defects, and ends in a terminal status that returns to the human.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0b1220"/>
@@ -60,8 +60,8 @@
       <text x="895" y="140">profile · proof tier</text>
       <text x="1145" y="120">loads only the rules and</text>
       <text x="1145" y="140">workflows it needs</text>
-      <text x="1145" y="380">R2 and R3 work waits for</text>
-      <text x="1145" y="400">a human decision</text>
+      <text x="1145" y="380">R3 work waits for</text>
+      <text x="1145" y="400">explicit human approval</text>
       <text x="895" y="380">smallest safe change</text>
       <text x="895" y="400">inside the approved scope</text>
       <text x="645" y="380">run checks, review the diff</text>

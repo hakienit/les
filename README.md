@@ -30,7 +30,7 @@ Run `npx` outside a checkout of this repository, then open a new terminal so
 - **No footprint.** A repository gets `LES-AGENT.md` plus one pointer file per CLI. The LES source stays in `~/.les-agents`.
 
 <p align="center">
-  <img src="docs/assets/flow.svg" alt="A request passes through the provider pointer, LES-AGENT.md, the bootstrap, and one skill. R2 and R3 work waits at an approval gate. The work is done and verified, looping back to fix defects, and ends in a terminal status that returns to the human." width="100%">
+  <img src="docs/assets/flow.svg" alt="A request passes through the provider pointer, LES-AGENT.md, the bootstrap, and one skill. R3 work waits at an approval gate. The work is done and verified, looping back to fix defects, and ends in a terminal status that returns to the human." width="100%">
 </p>
 
 ## Commands
