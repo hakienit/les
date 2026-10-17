@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { access, readFile, readdir } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +12,8 @@ const rootFiles = ["package.json", "README.md", "CHANGELOG.md", "LICENSE", "inve
 const providers = ["codex", "claude-code", "gemini-cli", "antigravity"];
 const failures = [];
 const fail = (message) => failures.push(message);
+// Inventory paths use "/" on every platform.
+const rel = (path) => relative(root, path).split(sep).join("/");
 
 async function walk(path) {
   const result = [];
@@ -19,7 +21,7 @@ async function walk(path) {
     if (entry.name === ".DS_Store") continue;
     const child = join(path, entry.name);
     if (entry.isDirectory()) result.push(...await walk(child));
-    else result.push(relative(root, child));
+    else result.push(rel(child));
   }
   return result;
 }
@@ -72,9 +74,9 @@ for (const skill of inventory.skills || []) {
     for (const dependency of dependencies) {
       const target = resolve(dirname(join(root, skill.path)), dependency);
       await access(target);
-      if (relative(root, target).startsWith("policies/workflows/")) {
-        loadedWorkflows.add(relative(root, target));
-        workflows.add(relative(root, target));
+      if (rel(target).startsWith("policies/workflows/")) {
+        loadedWorkflows.add(rel(target));
+        workflows.add(rel(target));
       }
     }
     skillWorkflowLoads.set(skill.name, workflows);

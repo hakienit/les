@@ -20,11 +20,12 @@ for (const field of ["dependencies", "optionalDependencies", "bundleDependencies
 }
 const inventory = spawnSync(process.execPath, [resolve(root, "bin/verify-inventory.mjs")], { cwd: root, encoding: "utf8" });
 if (inventory.status !== 0) fail("inventory verification failed\n" + inventory.stderr.trim());
-const packed = spawnSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: root, encoding: "utf8" });
+const packed = spawnSync("npm pack --dry-run --json --ignore-scripts", { cwd: root, encoding: "utf8", shell: true });
 if (packed.status !== 0) fail("package dry-run failed: " + packed.stderr.trim());
 else {
   try {
-    for (const { path } of JSON.parse(packed.stdout)[0].files) {
+    // npm 12 returns an object keyed by package name; older npm returns an array.
+    for (const { path } of Object.values(JSON.parse(packed.stdout))[0].files) {
       if (!allowed.some((prefix) => path === prefix || path.startsWith(prefix))) fail("unexpected tarball file: " + path);
     }
   } catch { fail("package dry-run returned invalid metadata"); }

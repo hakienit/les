@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { access, chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -204,8 +204,12 @@ test("connect discovers available CLIs and selects connected/default-on provider
   try {
     for (const provider of ["codex", "gemini"]) {
       const command = join(cliBin, provider);
-      await writeFile(command, "#!/bin/sh\nexit 0\n");
-      await chmod(command, 0o755);
+      // Windows npm installs CLIs as .cmd shims.
+      if (process.platform === "win32") await writeFile(command + ".cmd", "@exit /b 0\r\n");
+      else {
+        await writeFile(command, "#!/bin/sh\nexit 0\n");
+        await chmod(command, 0o755);
+      }
     }
     const env = { LES_HOME: home, PATH: cliBin, LES_DISABLE_PATH_SETUP: "1" };
     assert.equal(run([], project, env).status, 0);
@@ -325,13 +329,14 @@ test("user install never writes provider home directories", async () => {
 });
 
 test("package tarball is limited to public LES paths", () => {
-  const packed = JSON.parse(execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], {
+  const packed = JSON.parse(execFileSync("npm pack --dry-run --json --ignore-scripts", {
     cwd: root,
+    shell: true,
     encoding: "utf8",
     env: { ...process.env, NPM_CONFIG_CACHE: join(tmpdir(), "les-npm-cache") }
   }));
   const allowed = ["bin/", "policies/", "skills/", "profiles/", "adapters/", "templates/", "tools/", "inventory.yaml", "routes.yaml", "README.md", "CHANGELOG.md", "LICENSE", "package.json"];
-  for (const file of packed[0].files.map((entry) => entry.path)) {
+  for (const file of Object.values(packed)[0].files.map((entry) => entry.path)) {
     assert.ok(allowed.some((prefix) => file === prefix || file.startsWith(prefix)), "unexpected tarball file: " + file);
   }
 });
@@ -373,7 +378,7 @@ test("skill catalog exposes the approved operational entrypoints", async () => {
     const source = await readFile(join(root, skill.path), "utf8");
     names.push(source.match(/^name:\s*(.+)$/mu)?.[1]);
     for (const dependency of JSON.parse(source.match(/^loads:\s*(\[.*\])$/mu)?.[1] || "[]")) {
-      loaded.add(resolve(join(root, skill.path, ".."), dependency).slice(root.length + 1));
+      loaded.add(resolve(join(root, skill.path, ".."), dependency).slice(root.length + 1).split(sep).join("/"));
     }
   }
   assert.deepEqual(names.sort(), expected);

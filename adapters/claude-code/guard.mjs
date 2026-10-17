@@ -4,7 +4,7 @@
 // `guard.mjs session-start` is the matching SessionStart hook; it prints the bootstrap reminder.
 import { appendFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const secretPath = /(?:^|[\\/])(?:\.env(?!\.(?:example|sample|template)\b)[\w.-]*|\.ssh[\\/][^\s]*|id_(?:rsa|dsa|ecdsa|ed25519)|\.aws[\\/]credentials|\.netrc|[\w.-]+\.pem)$/u;
@@ -17,6 +17,11 @@ function words(segment) {
 
 function home() {
   return process.env.HOME || homedir();
+}
+
+// Windows paths are case-insensitive and drive letters arrive in either case.
+function same(path) {
+  return process.platform === "win32" ? path.toLowerCase() : path;
 }
 
 function expand(path) {
@@ -38,8 +43,9 @@ export function check(call, project = process.cwd()) {
         if (parts[first] === "find" && word !== parts[first + 1]) continue;
         const target = expand(word);
         if (/[$`]/u.test(target)) return "deletes an unresolved path: " + word;
-        const absolute = resolve(project, target);
-        if (absolute !== project && !absolute.startsWith(project + "/") || absolute === home() || absolute === "/") return "deletes outside the project: " + word;
+        const absolute = same(resolve(project, target));
+        const root = same(project);
+        if (absolute !== root && !absolute.startsWith(root + sep) || absolute === same(home()) || absolute === "/") return "deletes outside the project: " + word;
       }
     }
     if (parts[first] === "git" && parts[first + 1] === "push") {
@@ -73,8 +79,8 @@ export function gate(call) {
     return undefined;
   }
   if (!gated.has(call.tool_name)) return undefined;
-  const seen = existsSync(log) ? readFileSync(log, "utf8").split("\n") : [];
-  const missing = required().filter((file) => !seen.includes(file));
+  const seen = existsSync(log) ? readFileSync(log, "utf8").split("\n").map(same) : [];
+  const missing = required().filter((file) => !seen.includes(same(file)));
   return missing.length ? "LES bootstrap is not fully read in this session. Read these files with the Read tool first: " + missing.join(", ") : undefined;
 }
 

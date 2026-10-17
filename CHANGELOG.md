@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Fix Windows: `les connect` and `les doctor` now detect provider CLIs installed as npm `.cmd` shims, such as `codex` and `gemini`.
+- Fix Windows: `les guard off` removes the guard hooks, and `les guard on` no longer adds them twice.
+- Fix Windows: the guard allows deletes inside the project and matches bootstrap reads regardless of drive-letter case.
+- Fix Windows: install manifests and `les diff` use `/` paths, so legacy updates no longer report every file as missing.
+- Force LF line endings with `.gitattributes`, and make `verify-inventory`, `verify-release`, and the tests pass on Windows and npm 12. CI now also runs on `windows-latest`.
+
 ## 1.3.0 - 2026-10-16
 
 - `les guard on` now also enforces the bootstrap in Claude Code. A `SessionStart` hook (`guard.mjs session-start`) resets a per-session read log after startup, resume, `/clear`, and compaction. The `PreToolUse` guard then blocks `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, and `Bash` until the adapter, `les-bootstrap`, and every file it `loads` were read with the Read tool. `les guard off` removes both hooks.

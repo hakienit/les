@@ -177,7 +177,8 @@ async function filesBelow(root, prefix = "") {
   const entries = await readdir(root, { withFileTypes: true });
   const files = [];
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    const relativePath = prefix ? join(prefix, entry.name) : entry.name;
+    // Manifest and source keys always use "/" so they match on Windows.
+    const relativePath = prefix ? prefix + "/" + entry.name : entry.name;
     if (entry.isDirectory()) files.push(...await filesBelow(join(root, entry.name), relativePath));
     else files.push(relativePath);
   }
@@ -378,7 +379,8 @@ async function readManifest(target) {
 }
 
 async function unmanagedFiles(target, manifest) {
-  const known = new Set(manifest.managed.map((entry) => entry.path));
+  // Manifests written on Windows before 1.3.1 used "\" separators.
+  const known = new Set(manifest.managed.map((entry) => entry.path.replaceAll("\\", "/")));
   known.add(manifestFilename);
   for (const path of legacyManagedFiles) known.add(path);
   return (await filesBelow(target)).filter((path) => !known.has(path));
@@ -648,9 +650,17 @@ async function setAdapter(provider, options, enabled) {
   console.log((enabled ? "Enabled " : "Disabled ") + provider + " routing.");
 }
 
+// Windows npm CLIs are .cmd shims, which spawnSync only finds through a shell; commands are fixed names, never user input.
+function commandWorks(command) {
+  const result = process.platform === "win32"
+    ? spawnSync(command + " --version", { stdio: "ignore", shell: true })
+    : spawnSync(command, ["--version"], { stdio: "ignore" });
+  return result.status === 0;
+}
+
 function availableProviders() {
   return supportedProviders
-    .filter(({ command }) => spawnSync(command, ["--version"], { stdio: "ignore" }).status === 0)
+    .filter(({ command }) => commandWorks(command))
     .map(({ name }) => name);
 }
 
@@ -940,7 +950,7 @@ async function guard(root, enabled, options) {
   if (await exists(path)) {
     try { settings = JSON.parse(await readFile(path, "utf8")); } catch { throw new Error(guardSettings + " is not valid JSON; fix it before running les guard."); }
   }
-  const isGuard = (entry) => entry?.hooks?.some((hook) => /adapters\/claude-code\/guard\.mjs"/u.test(String(hook.command)));
+  const isGuard = (entry) => entry?.hooks?.some((hook) => /adapters[\\/]claude-code[\\/]guard\.mjs"/u.test(String(hook.command)));
   const command = "node \"" + script + "\"";
   const entries = {
     PreToolUse: { matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", hooks: [{ type: "command", command }] },
@@ -1007,7 +1017,7 @@ async function doctor() {
     const command = supportedProviders.find((entry) => entry.name === provider)?.command;
     if (!command || !await exists(adapterSourceFor(root, provider))) {
       statuses.push(doctorLine("PENDING_USER_ACTION", "provider-adapter", provider + " has no compatible LES adapter"));
-    } else if (spawnSync(command, ["--version"], { stdio: "ignore" }).status !== 0) {
+    } else if (!commandWorks(command)) {
       statuses.push(doctorLine("PENDING_USER_ACTION", "provider-adapter", provider + " CLI is unavailable; host smoke evidence is pending"));
     } else {
       statuses.push(doctorLine("PENDING_USER_ACTION", "provider-adapter", provider + " requires instruction-loading and permission smoke-test evidence"));
