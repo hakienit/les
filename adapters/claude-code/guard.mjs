@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // LES guard: a Claude Code PreToolUse hook. Reads the tool call as JSON on stdin and
-// exits 2 with a reason on stderr to block it. Enable with `les guard on`.
+// exits 2 with a reason on stderr to block it. Enable with `les guard on` (`les guard on codex` for Codex).
 // `guard.mjs session-start` is the matching SessionStart hook; it prints the bootstrap reminder.
+// Codex sends the same stdin shape and honors exit 2; it runs with `--no-gate`.
 import { appendFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
@@ -85,9 +86,11 @@ export function gate(call) {
 }
 
 // SessionStart hook: stdout becomes session context. It also resets the read log, since /clear, resume, and compaction drop the files from context.
-export function sessionStart(id) {
+// ponytail: Codex has no Read tool to observe, so `--no-gate` hosts get the risky-call check and the reminder, not the read gate.
+export function sessionStart(id, gated = true) {
   if (id) rmSync(readLog(id), { force: true });
-  return "LES is active. Before any work in this session, read every file in this list with the Read tool, even when a handoff or plan looks complete: " + required().join(", ") + ". Edit, Write, and Bash calls are blocked until you do. "
+  return "LES is active. Before any work in this session, read every file in this list, even when a handoff or plan looks complete: " + required().join(", ") + ". "
+    + (gated ? "Edit, Write, and Bash calls are blocked until you do. " : "")
     + "Before editing: state context trace, risk, and acceptance. Write the test before the code. Review the final diff. End every task-scoped reply with the LES status footer from policies/workflow-contracts.md.";
 }
 
@@ -97,8 +100,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   for await (const chunk of process.stdin) raw += chunk;
   let call;
   try { call = JSON.parse(raw); } catch { call = undefined; }
-  if (process.argv[2] === "session-start") {
-    console.log(sessionStart(call?.session_id));
+  if (process.argv.includes("session-start")) {
+    console.log(sessionStart(call?.session_id, !process.argv.includes("--no-gate")));
     process.exit(0);
   }
   if (!call) process.exit(0);
@@ -107,7 +110,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.error("LES guard blocked this call: " + reason + ". Ask the user to run it or approve it explicitly.");
     process.exit(2);
   }
-  const missing = gate(call);
+  const missing = process.argv.includes("--no-gate") ? undefined : gate(call);
   if (missing) {
     console.error("LES guard blocked this call: " + missing);
     process.exit(2);

@@ -461,6 +461,15 @@ test("guard blocks Edit, Write, and Bash until every bootstrap file is read in t
   reset();
 });
 
+test("guard --no-gate (Codex) blocks risky Bash like Claude Code but never gates on bootstrap reads", () => {
+  const codex = (call) => spawnSync(process.execPath, [guardScript, "--no-gate"], { encoding: "utf8", input: JSON.stringify({ session_id: "codex-" + process.pid, cwd: "/work/app", ...call }), env: { ...process.env, HOME: "/home/tester", CLAUDE_PROJECT_DIR: "/work/app" } }).status;
+  for (const command of ["cat .env", "rm -rf ../other", "git push --force origin main"]) assert.equal(codex(bash(command)), 2, command);
+  for (const command of ["ls -la", "git push origin feature/x"]) assert.equal(codex(bash(command)), 0, command);
+  assert.equal(codex({ tool_name: "apply_patch", tool_input: { command: "*** Begin Patch" } }), 0);
+  const out = spawnSync(process.execPath, [guardScript, "session-start", "--no-gate"], { encoding: "utf8" }).stdout;
+  assert.ok(out.includes("status footer") && !out.includes("are blocked until"));
+});
+
 test("guard session-start tells the agent to read the adapter and bootstrap", () => {
   const out = spawnSync(process.execPath, [guardScript, "session-start"], { encoding: "utf8" });
   assert.equal(out.status, 0);
@@ -498,6 +507,17 @@ test("guard on and off merge into settings.local.json without touching other hoo
     const off = JSON.parse(await readFile(settings, "utf8"));
     assert.deepEqual(off.hooks.PreToolUse, [other]);
     assert.equal(off.hooks.SessionStart, undefined);
+
+    const codexHooks = join(project, ".codex", "hooks.json");
+    const script = join(home, "adapters", "claude-code", "guard.mjs");
+    assert.equal(run(["guard", "on", "codex"], project, env).status, 0);
+    const codexOn = JSON.parse(await readFile(codexHooks, "utf8"));
+    assert.deepEqual(codexOn.hooks.PreToolUse, [{ matcher: "Bash", hooks: [{ type: "command", command: `node "${script}" --no-gate` }] }]);
+    assert.equal(codexOn.hooks.SessionStart[0].hooks[0].command, `node "${script}" --no-gate session-start`);
+    assert.equal(execFileSync("git", ["status", "--short"], { cwd: project, encoding: "utf8" }).includes(".codex"), false);
+    assert.equal(run(["guard", "off", "codex"], project, env).status, 0);
+    assert.deepEqual(JSON.parse(await readFile(codexHooks, "utf8")), {});
+    assert.notEqual(run(["guard", "on", "gemini"], project, env).status, 0);
     assert.notEqual(run(["guard"], project, env).status, 0);
     await writeFile(settings, "{ nope");
     assert.notEqual(run(["guard", "on"], project, env).status, 0);

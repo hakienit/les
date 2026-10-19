@@ -42,6 +42,7 @@ Run `npx` outside a checkout of this repository, then open a new terminal so
 | `les on`, `les off [provider]` | Enable or disable routing. |
 | `les doctor` | Check the install, the repository pointers, and for updates. |
 | `les guard on`, `les guard off` | Claude Code hooks: block secret reads, deletes outside the project, and force pushes to protected branches, and gate edits until the bootstrap is read. A guardrail, not a sandbox. |
+| `les guard on codex`, `les guard off codex` | Same risky-call blocks for Codex shell commands in `.codex/hooks.json`, without the bootstrap read gate. Trust the hooks with `/hooks` in Codex. |
 | `les lint FILE...` | Flag placeholders and unmeasurable acceptance criteria in a spec. |
 
 Add `--dry-run` to any repository command to preview it. LES never overwrites a
