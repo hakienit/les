@@ -931,7 +931,7 @@ async function lint(files) {
 
 // Codex and Gemini CLI have no matching Edit/Write tool names or Read gate to observe, so they get the risky-call check only (--no-gate).
 const guardHosts = {
-  claude: { label: "Claude Code", file: ".claude/settings.local.json", before: "PreToolUse", matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", start: "startup|resume|clear|compact", flags: "", stop: true },
+  claude: { label: "Claude Code", file: ".claude/settings.local.json", before: "PreToolUse", matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", start: "startup|resume|clear|compact", flags: "", stop: true, failClosed: true },
   codex: { label: "Codex", file: ".codex/hooks.json", before: "PreToolUse", matcher: "Bash", start: "startup|resume|clear|compact", flags: " --no-gate", note: "Codex skips new hooks until trusted: run /hooks in Codex and trust them." },
   gemini: { label: "Gemini CLI", file: ".gemini/settings.json", before: "BeforeTool", matcher: "run_shell_command|read_file", start: "*", flags: " --host gemini" }
 };
@@ -950,7 +950,7 @@ async function excludeLocally(entry) {
 async function guard(root, enabled, options, host = "claude") {
   const script = join(root, "adapters", "claude-code", "guard.mjs");
   if (enabled && !await exists(script)) throw new Error("Guard script is missing: " + script);
-  const { label, file: guardSettings, before, matcher, start, flags, note, stop } = guardHosts[host];
+  const { label, file: guardSettings, before, matcher, start, flags, note, stop, failClosed } = guardHosts[host];
   const path = join(process.cwd(), guardSettings);
   let settings = {};
   if (await exists(path)) {
@@ -959,7 +959,8 @@ async function guard(root, enabled, options, host = "claude") {
   const isGuard = (entry) => entry?.hooks?.some((hook) => /adapters[\\/]claude-code[\\/]guard\.mjs"/u.test(String(hook.command)));
   const command = "node \"" + script + "\"" + flags;
   const entries = {
-    [before]: { matcher, hooks: [{ type: "command", command }] },
+    // onFailure "block" (Claude Code 2.1.295+): a crashed or missing guard blocks the call instead of silently allowing it. `les guard off` removes it.
+    [before]: { matcher, hooks: [{ type: "command", command, ...failClosed && { onFailure: "block" } }] },
     SessionStart: { matcher: start, hooks: [{ type: "command", command: command + " session-start" }] },
     ...stop && { Stop: { hooks: [{ type: "command", command: command + " stop" }] } }
   };

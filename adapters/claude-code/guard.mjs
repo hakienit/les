@@ -118,6 +118,7 @@ export function sessionStart(id, gated = true) {
     if (id) appendFileSync(readLog(id), files.join("\n") + "\n");
     return "LES bootstrap, loaded by the session-start hook. Do not re-read these files:\n\n" + text + "\n\n" + reminder;
   }
+  if (!files.length) return "LES guard warning: the bootstrap skill is missing or its `loads` line is unreadable, so the read gate and bootstrap injection are off. Run `les doctor`, then `les` to repair the install. " + reminder;
   return "LES is active. Before any work in this session, read every file in this list, even when a handoff or plan looks complete: " + files.join(", ") + ". "
     + (gated ? "Edit, Write, and Bash calls are blocked until you do. " : "") + reminder;
 }
@@ -152,8 +153,12 @@ if (realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url
     console.error("LES guard blocked this call: " + reason + ". Ask the user to run it or approve it explicitly.");
     process.exit(2);
   }
-  if (call.session_id) appendFileSync(turnLog(call.session_id), "x"); // marks the turn as task work for the Stop hook
-  const missing = noGate ? undefined : gate(call);
+  // The risky-call check above fails closed (`onFailure: "block"` in the hook config). Bookkeeping errors, such as an unwritable tmpdir, must not lock the agent out.
+  let missing;
+  try {
+    if (call.session_id) appendFileSync(turnLog(call.session_id), "x"); // marks the turn as task work for the Stop hook
+    missing = noGate ? undefined : gate(call);
+  } catch { missing = undefined; }
   if (missing) {
     console.error("LES guard blocked this call: " + missing);
     process.exit(2);

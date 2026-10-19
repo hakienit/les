@@ -480,6 +480,17 @@ test("guard blocks Edit, Write, and Bash until every bootstrap file is read when
   await rm(store, { recursive: true, force: true });
 });
 
+test("session-start warns instead of staying silent when the bootstrap loads line is unreadable", async () => {
+  const store = realpathSync(await mkdtemp(join(tmpdir(), "les-cli-broken-")));
+  for (const dir of [["adapters", "claude-code"], ["skills", "les-bootstrap"], ["policies"]]) cpSync(join(root, ...dir), join(store, ...dir), { recursive: true });
+  const skill = join(store, "skills", "les-bootstrap", "SKILL.md");
+  await writeFile(skill, (await readFile(skill, "utf8")).replace(/^loads: .*$/mu, "loads: broken"));
+  const out = spawnSync(process.execPath, [join(store, "adapters", "claude-code", "guard.mjs"), "session-start"], { encoding: "utf8" });
+  assert.equal(out.status, 0);
+  assert.ok(out.stdout.includes("LES guard warning"), out.stdout);
+  await rm(store, { recursive: true, force: true });
+});
+
 test("guard stop sends a task reply back once when the LES status footer is missing or inconsistent", () => {
   const session_id = "les-stop-" + process.pid;
   const stop = (extra) => spawnSync(process.execPath, [guardScript, "stop"], { encoding: "utf8", input: JSON.stringify({ session_id, ...extra }) });
@@ -545,6 +556,8 @@ test("guard on and off merge into settings.local.json without touching other hoo
     assert.equal(exclude.filter((line) => line === ".claude/settings.local.json").length, 1);
     assert.equal(execFileSync("git", ["status", "--short"], { cwd: project, encoding: "utf8" }).includes(".claude"), false);
     assert.equal(on.hooks.PreToolUse[1].hooks[0].command, `node "${join(home, "adapters", "claude-code", "guard.mjs")}"`);
+    assert.equal(on.hooks.PreToolUse[1].hooks[0].onFailure, "block");
+    assert.equal(on.hooks.Stop[0].hooks[0].onFailure, undefined, "Stop hooks ignore onFailure");
     assert.equal(on.hooks.Stop.length, 1);
     assert.equal(on.hooks.Stop[0].hooks[0].command, `node "${join(home, "adapters", "claude-code", "guard.mjs")}" stop`);
     assert.equal(on.hooks.SessionStart.length, 1);
