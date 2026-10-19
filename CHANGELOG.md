@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0 - 2026-10-19
+
+- Add `les guard on codex` and `les guard on gemini`: the risky-call check for Codex and Gemini CLI shell commands, without the bootstrap read gate.
+- Inject the bootstrap at session start: it now fits the 10,000-character hook cap (17,004 to 9,709 characters), and `verify-inventory` fails if it stops fitting. The read list and gate remain as the fallback.
+- `lifecycle.md` and `workflows/task-lifecycle.md` leave the always-loaded set; review-findings and team-integration text moved into `workflows/review.md` and `workflows/handoff-recovery.md`.
+- Add a Stop hook that sends back, once, a reply that used tools but lacks the LES status footer.
+- Fail closed: `les guard on` sets `onFailure: "block"` on the PreToolUse hook (Claude Code 2.1.295 or later), so a missing or crashing guard blocks the call. Run `les guard off` in a normal terminal to remove it. Session start warns when the bootstrap `loads` line is unreadable.
+- Fix: the guard compared unresolved paths and silently did nothing when installed behind a symlink.
+- `verify-inventory` now checks that the bootstrap `loads`, the inventory kernel, and `policies/README.md` list the same policies.
 ## 1.3.2 - 2026-10-17
 
 - Trim `README.md` to a minimal landing page: install, why, commands, and update.
