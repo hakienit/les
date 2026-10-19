@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.0 - 2026-10-19
+
+- `les doctor` reports the Claude Code guard: `READY` when `les guard on` is active, `FALLBACK` (exit code unchanged) when it is off, since nothing then injects the bootstrap or enforces the status footer.
+- `les init` recommends `les guard on` for Claude Code. The guard stays opt-in.
+
 ## 1.4.0 - 2026-10-19
 
 - Add `les guard on codex` and `les guard on gemini`: the risky-call check for Codex and Gemini CLI shell commands, without the bootstrap read gate.
