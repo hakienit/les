@@ -3,7 +3,7 @@
 // exits 2 with a reason on stderr to block it. Enable with `les guard on` (`les guard on codex` for Codex).
 // `guard.mjs session-start` is the matching SessionStart hook; it prints the bootstrap reminder.
 // Codex sends the same stdin shape and honors exit 2; it runs with `--no-gate`.
-import { appendFileSync, existsSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -85,16 +85,32 @@ export function gate(call) {
   return missing.length ? "LES bootstrap is not fully read in this session. Read these files with the Read tool first: " + missing.join(", ") : undefined;
 }
 
+// Claude Code caps hook stdout at 10,000 characters and silently swaps the rest for a 2,000-character preview.
+export const hookCap = 10000;
+const reminder = "Before editing: state context trace, risk, and acceptance. Write the test first. Review the final diff. End every task-scoped reply with the LES status footer.";
+
+// The bootstrap skill body plus every policy it loads, minus front matter. Empty when a file is unreadable.
+export function bootstrapText(files = required()) {
+  try { return files.slice(1).map((file) => readFileSync(file, "utf8").replace(/^---\n[\s\S]*?\n---\n/u, "").trim()).join("\n\n"); } catch { return ""; }
+}
+
 // SessionStart hook: stdout becomes session context. It also resets the read log, since /clear, resume, and compaction drop the files from context.
+// The bootstrap is injected when it fits the cap and counts as read; otherwise the agent gets the read list and the gate stays on.
 // ponytail: Codex has no Read tool to observe, so `--no-gate` hosts get the risky-call check and the reminder, not the read gate.
 export function sessionStart(id, gated = true) {
   if (id) rmSync(readLog(id), { force: true });
-  return "LES is active. Before any work in this session, read every file in this list, even when a handoff or plan looks complete: " + required().join(", ") + ". "
-    + (gated ? "Edit, Write, and Bash calls are blocked until you do. " : "")
-    + "Before editing: state context trace, risk, and acceptance. Write the test before the code. Review the final diff. End every task-scoped reply with the LES status footer from policies/workflow-contracts.md.";
+  const files = required();
+  const text = bootstrapText(files);
+  if (text && text.length + reminder.length + 120 <= hookCap) {
+    if (id) appendFileSync(readLog(id), files.join("\n") + "\n");
+    return "LES bootstrap, loaded by the session-start hook. Do not re-read these files:\n\n" + text + "\n\n" + reminder;
+  }
+  return "LES is active. Before any work in this session, read every file in this list, even when a handoff or plan looks complete: " + files.join(", ") + ". "
+    + (gated ? "Edit, Write, and Bash calls are blocked until you do. " : "") + reminder;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// realpath: a symlinked install path (macOS /var, ~/.les-agents) would otherwise skip main and fail open.
+if (realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   let raw = "";
   process.stdin.setEncoding("utf8");
   for await (const chunk of process.stdin) raw += chunk;

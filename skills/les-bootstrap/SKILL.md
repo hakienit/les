@@ -5,7 +5,7 @@ invocation: bootstrap
 maturity: stable
 route: bootstrap
 profile: core
-loads: ["../../policies/principles.md","../../policies/precedence.md","../../policies/lifecycle.md","../../policies/risk-model.md","../../policies/memory-model.md","../../policies/verification.md","../../policies/workflow-contracts.md","../../policies/rules/context-loading.md","../../policies/workflows/task-lifecycle.md"]
+loads: ["../../policies/principles.md","../../policies/precedence.md","../../policies/risk-model.md","../../policies/memory-model.md","../../policies/verification.md","../../policies/workflow-contracts.md","../../policies/rules/context-loading.md"]
 ---
 
 # LES Bootstrap
@@ -13,6 +13,7 @@ loads: ["../../policies/principles.md","../../policies/precedence.md","../../pol
 ## Invoke
 
 Use first for every LES task; load only task-activated rules after this kernel.
+When the session-start hook already injected this bootstrap, treat it as loaded and do not re-read `loads`.
 
 ## Inputs
 
@@ -35,20 +36,8 @@ For task-scoped responses, use the closeability footer defined in
 
 ## Guardrails
 
-Do not grant authority, duplicate policy, or load inactive profiles.
+Do not grant authority, duplicate policy, or load inactive profiles. Load the rules the task activates and one workflow from `../../policies/workflows/`; use `task-lifecycle.md` when none matches. Stop before dependent work when precedence is unresolved or required authority is absent.
 
 ## Verification
 
 Return `COMPLETE`, `BLOCKED`, `PENDING_USER_ACTION`, `FAILED`, or `SKIPPED` with evidence.
-
-1. Read `../../policies/principles.md`, `precedence.md`, `lifecycle.md`,
-   `risk-model.md`, `memory-model.md`, `verification.md`, and
-   `workflow-contracts.md`.
-2. Read the adopting project's entrypoint, active work state, and selected profiles.
-3. Load `../../policies/rules/context-loading.md`, then the rules activated by the task.
-4. Select one workflow from `../../policies/workflows/`; use
-   `task-lifecycle.md` when no narrower workflow matches.
-5. State outcome, scope, selected route and fallback, risk level, active profile,
-   verification tier, context trace, and any approval gate.
-
-Stop before dependent work when precedence is unresolved or required authority is absent.

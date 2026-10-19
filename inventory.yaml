@@ -2,7 +2,7 @@
   "inventoryVersion": 1,
   "kernel": [
     "policies/README.md", "policies/principles.md", "policies/precedence.md",
-    "policies/lifecycle.md", "policies/risk-model.md", "policies/memory-model.md",
+    "policies/risk-model.md", "policies/memory-model.md",
     "policies/verification.md", "policies/workflow-contracts.md"
   ],
   "rules": [

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { access, chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cpSync, realpathSync, rmSync } from "node:fs";
+import { access, appendFile, chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import test from "node:test";
@@ -408,8 +409,8 @@ test("lint flags placeholders and acceptance criteria without an observable chec
 });
 
 const guardScript = join(root, "adapters", "claude-code", "guard.mjs");
-function guardRun(call, project) {
-  return spawnSync(process.execPath, [guardScript], { encoding: "utf8", input: JSON.stringify(call), env: { ...process.env, HOME: "/home/tester", CLAUDE_PROJECT_DIR: project } });
+function guardRun(call, project, script = guardScript) {
+  return spawnSync(process.execPath, [script], { encoding: "utf8", input: JSON.stringify(call), env: { ...process.env, HOME: "/home/tester", CLAUDE_PROJECT_DIR: project } });
 }
 const bash = (command) => ({ tool_name: "Bash", tool_input: { command } });
 
@@ -429,17 +430,34 @@ test("guard blocks secret reads, deletes outside the project, and protected forc
   assert.equal(spawnSync(process.execPath, [guardScript], { input: "not json" }).status, 0);
 });
 
-test("guard blocks Edit, Write, and Bash until every bootstrap file is read in the session, and again after session-start", async () => {
+test("session-start injects the bootstrap under the hook cap and counts it as read", async () => {
+  const session_id = "les-inject-" + process.pid;
+  const out = spawnSync(process.execPath, [guardScript, "session-start"], { encoding: "utf8", input: JSON.stringify({ session_id }) }).stdout;
+  assert.ok(out.length < 10000, String(out.length));
+  assert.ok(out.includes("Human authority") && out.includes("Terminal statuses") && out.includes("# LES Bootstrap"));
+  assert.ok(!out.includes("loads: ["), "front matter must not be injected");
+  assert.equal(guardRun({ session_id, tool_name: "Edit", tool_input: { file_path: "/work/app/a.ts" } }, "/work/app").status, 0);
+  spawnSync(process.execPath, [guardScript, "session-start"], { input: JSON.stringify({ session_id }) });
+  rmSync(join(tmpdir(), "les-bootstrap-" + session_id), { force: true });
+});
+
+test("guard blocks Edit, Write, and Bash until every bootstrap file is read when the bootstrap exceeds the hook cap", async () => {
   const project = "/work/app";
   const session_id = "les-gate-" + process.pid;
-  const call = (extra) => guardRun({ session_id, ...extra }, project).status;
+  // A copy of the bootstrap whose policies no longer fit the cap, so session-start falls back to the read list.
+  const store = realpathSync(await mkdtemp(join(tmpdir(), "les-cli-bloat-")));
+  for (const dir of [["adapters", "claude-code"], ["skills", "les-bootstrap"], ["policies"]]) cpSync(join(root, ...dir), join(store, ...dir), { recursive: true });
+  await appendFile(join(store, "policies", "principles.md"), "\n" + "padding ".repeat(1300));
+  const script = join(store, "adapters", "claude-code", "guard.mjs");
+  const call = (extra) => guardRun({ session_id, ...extra }, project, script).status;
   const edit = { tool_name: "Edit", tool_input: { file_path: "/work/app/a.ts" } };
   const readOf = (file_path) => ({ tool_name: "Read", tool_input: { file_path } });
-  const reset = () => spawnSync(process.execPath, [guardScript, "session-start"], { input: JSON.stringify({ session_id }) });
-  const skill = join(root, "skills", "les-bootstrap", "SKILL.md");
+  const reset = () => spawnSync(process.execPath, [script, "session-start"], { input: JSON.stringify({ session_id }) });
+  const skill = join(store, "skills", "les-bootstrap", "SKILL.md");
   const loads = JSON.parse(/^loads: (\[.*\])$/mu.exec(await readFile(skill, "utf8"))[1]);
-  const required = [join(root, "adapters", "claude-code", "CLAUDE.md"), skill, ...loads.map((path) => resolve(root, "skills", "les-bootstrap", path))];
+  const required = [join(store, "adapters", "claude-code", "CLAUDE.md"), skill, ...loads.map((path) => resolve(store, "skills", "les-bootstrap", path))];
   const readAll = () => required.forEach((file) => assert.equal(call(readOf(file)), 0));
+  assert.ok(spawnSync(process.execPath, [script, "session-start"], { encoding: "utf8" }).stdout.includes("read every file in this list"), "fallback expected");
   reset();
   assert.equal(call(edit), 2);
   assert.equal(call(bash("ls")), 2);
@@ -447,7 +465,7 @@ test("guard blocks Edit, Write, and Bash until every bootstrap file is read in t
   assert.equal(call(readOf("/work/app/src/index.ts")), 0);
   assert.equal(call(edit), 2);
   for (const file of required.slice(0, -1)) assert.equal(call(readOf(file)), 0);
-  const blocked = guardRun({ session_id, ...edit }, project);
+  const blocked = guardRun({ session_id, ...edit }, project, script);
   assert.equal(blocked.status, 2);
   assert.ok(blocked.stderr.includes(required.at(-1)), blocked.stderr);
   assert.equal(call(readOf(required.at(-1))), 0);
@@ -457,8 +475,9 @@ test("guard blocks Edit, Write, and Bash until every bootstrap file is read in t
   assert.equal(call(edit), 2);
   readAll();
   assert.equal(call(edit), 0);
-  assert.equal(guardRun(edit, project).status, 0);
+  assert.equal(guardRun(edit, project, script).status, 0);
   reset();
+  await rm(store, { recursive: true, force: true });
 });
 
 test("guard --no-gate (Codex) blocks risky Bash like Claude Code but never gates on bootstrap reads", () => {
@@ -468,13 +487,6 @@ test("guard --no-gate (Codex) blocks risky Bash like Claude Code but never gates
   assert.equal(codex({ tool_name: "apply_patch", tool_input: { command: "*** Begin Patch" } }), 0);
   const out = spawnSync(process.execPath, [guardScript, "session-start", "--no-gate"], { encoding: "utf8" }).stdout;
   assert.ok(out.includes("status footer") && !out.includes("are blocked until"));
-});
-
-test("guard session-start tells the agent to read the adapter and bootstrap", () => {
-  const out = spawnSync(process.execPath, [guardScript, "session-start"], { encoding: "utf8" });
-  assert.equal(out.status, 0);
-  assert.ok(out.stdout.includes(join(root, "skills", "les-bootstrap", "SKILL.md")));
-  assert.ok(out.stdout.includes("status footer"));
 });
 
 test("guard on and off merge into settings.local.json without touching other hooks", async () => {

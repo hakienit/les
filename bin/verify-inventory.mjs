@@ -111,7 +111,10 @@ for (const path of kernelPolicies) {
   if (!policiesReadme.includes("`" + path.slice("policies/".length) + "`")) fail("bootstrap policy missing from policies/README.md kernel order: " + path);
 }
 for (const path of inventory.kernel) if (path !== "policies/README.md" && !kernelPolicies.includes(path)) fail("inventory kernel policy is not loaded by the bootstrap: " + path);
-if ((await import("../adapters/claude-code/guard.mjs")).required().length !== bootstrapLoads.length + 2) fail("guard cannot parse the bootstrap loads list");
+const guardModule = await import("../adapters/claude-code/guard.mjs");
+if (guardModule.required().length !== bootstrapLoads.length + 2) fail("guard cannot parse the bootstrap loads list");
+// The session-start hook injects the bootstrap only while it fits the host's hook output cap.
+else if (!guardModule.sessionStart().startsWith("LES bootstrap")) fail("bootstrap no longer fits the " + guardModule.hookCap + "-character session-start cap; trim policies or the bootstrap skill");
 
 const lifecycle = await readFile(join(root, "policies/lifecycle.md"), "utf8");
 const lifecycleSteps = lifecycle.split(/^## \d+\. /mu).slice(1);
