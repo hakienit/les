@@ -3,6 +3,7 @@
 // exits 2 with a reason on stderr to block it. Enable with `les guard on` (`les guard on codex` for Codex).
 // `guard.mjs session-start` is the matching SessionStart hook; it prints the bootstrap reminder.
 // Codex sends the same stdin shape and honors exit 2; it runs with `--no-gate`.
+// Gemini CLI runs with `--host gemini` (BeforeTool tool names mapped, SessionStart context as JSON).
 import { appendFileSync, existsSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
@@ -116,17 +117,22 @@ if (realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url
   for await (const chunk of process.stdin) raw += chunk;
   let call;
   try { call = JSON.parse(raw); } catch { call = undefined; }
+  // Gemini CLI shares Claude Code's stdin keys (tool_input.command, .file_path); only the tool names and SessionStart output differ.
+  const gemini = process.argv.includes("--host") && process.argv[process.argv.indexOf("--host") + 1] === "gemini";
+  const noGate = gemini || process.argv.includes("--no-gate");
   if (process.argv.includes("session-start")) {
-    console.log(sessionStart(call?.session_id, !process.argv.includes("--no-gate")));
+    const text = sessionStart(call?.session_id, !noGate);
+    console.log(gemini ? JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: text } }) : text);
     process.exit(0);
   }
   if (!call) process.exit(0);
+  if (gemini) call.tool_name = { run_shell_command: "Bash", read_file: "Read" }[call.tool_name] || call.tool_name;
   const reason = check(call, resolve(process.env.CLAUDE_PROJECT_DIR || call.cwd || process.cwd()));
   if (reason) {
     console.error("LES guard blocked this call: " + reason + ". Ask the user to run it or approve it explicitly.");
     process.exit(2);
   }
-  const missing = process.argv.includes("--no-gate") ? undefined : gate(call);
+  const missing = noGate ? undefined : gate(call);
   if (missing) {
     console.error("LES guard blocked this call: " + missing);
     process.exit(2);

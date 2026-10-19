@@ -480,6 +480,18 @@ test("guard blocks Edit, Write, and Bash until every bootstrap file is read when
   await rm(store, { recursive: true, force: true });
 });
 
+test("guard --host gemini maps Gemini tool names to the same verdicts and emits SessionStart context as JSON", () => {
+  const gemini = (tool_name, tool_input) => spawnSync(process.execPath, [guardScript, "--host", "gemini"], { encoding: "utf8", input: JSON.stringify({ session_id: "gemini-" + process.pid, cwd: "/work/app", tool_name, tool_input }), env: { ...process.env, HOME: "/home/tester", CLAUDE_PROJECT_DIR: "/work/app" } }).status;
+  for (const command of ["cat .env", "rm -rf ../other", "git push --force origin main"]) assert.equal(gemini("run_shell_command", { command }), 2, command);
+  assert.equal(gemini("read_file", { file_path: "/work/app/.env" }), 2);
+  for (const command of ["ls -la", "git push origin feature/x"]) assert.equal(gemini("run_shell_command", { command }), 0, command);
+  assert.equal(gemini("read_file", { file_path: "/work/app/src/index.ts" }), 0);
+  assert.equal(gemini("write_file", { file_path: "/work/app/a.ts", content: "" }), 0);
+  const out = JSON.parse(spawnSync(process.execPath, [guardScript, "session-start", "--host", "gemini"], { encoding: "utf8" }).stdout);
+  assert.equal(out.hookSpecificOutput.hookEventName, "SessionStart");
+  assert.ok(out.hookSpecificOutput.additionalContext.includes("Human authority"));
+});
+
 test("guard --no-gate (Codex) blocks risky Bash like Claude Code but never gates on bootstrap reads", () => {
   const codex = (call) => spawnSync(process.execPath, [guardScript, "--no-gate"], { encoding: "utf8", input: JSON.stringify({ session_id: "codex-" + process.pid, cwd: "/work/app", ...call }), env: { ...process.env, HOME: "/home/tester", CLAUDE_PROJECT_DIR: "/work/app" } }).status;
   for (const command of ["cat .env", "rm -rf ../other", "git push --force origin main"]) assert.equal(codex(bash(command)), 2, command);
@@ -529,7 +541,17 @@ test("guard on and off merge into settings.local.json without touching other hoo
     assert.equal(execFileSync("git", ["status", "--short"], { cwd: project, encoding: "utf8" }).includes(".codex"), false);
     assert.equal(run(["guard", "off", "codex"], project, env).status, 0);
     assert.deepEqual(JSON.parse(await readFile(codexHooks, "utf8")), {});
-    assert.notEqual(run(["guard", "on", "gemini"], project, env).status, 0);
+    const geminiSettings = join(project, ".gemini", "settings.json");
+    await mkdir(join(project, ".gemini"), { recursive: true });
+    await writeFile(geminiSettings, JSON.stringify({ theme: "dark" }));
+    assert.equal(run(["guard", "on", "gemini"], project, env).status, 0);
+    const geminiOn = JSON.parse(await readFile(geminiSettings, "utf8"));
+    assert.equal(geminiOn.theme, "dark");
+    assert.deepEqual(geminiOn.hooks.BeforeTool, [{ matcher: "run_shell_command|read_file", hooks: [{ type: "command", command: `node "${script}" --host gemini` }] }]);
+    assert.equal(geminiOn.hooks.SessionStart[0].hooks[0].command, `node "${script}" --host gemini session-start`);
+    assert.equal(run(["guard", "off", "gemini"], project, env).status, 0);
+    assert.deepEqual(JSON.parse(await readFile(geminiSettings, "utf8")), { theme: "dark" });
+    assert.notEqual(run(["guard", "on", "antigravity"], project, env).status, 0);
     assert.notEqual(run(["guard"], project, env).status, 0);
     await writeFile(settings, "{ nope");
     assert.notEqual(run(["guard", "on"], project, env).status, 0);

@@ -43,7 +43,7 @@ Usage:
                               (no names: pick from detected CLIs; --all: every detected CLI)
   les init                    create LES-AGENT.md only
   les on [provider]           enable one or all configured providers
-  les guard on|off [codex]    block secret reads, deletes outside the repo, and force pushes (Claude Code; codex = Codex)
+  les guard on|off [codex|gemini]  block secret reads, deletes outside the repo, and force pushes (default: Claude Code)
   les lint FILE...            flag placeholders and unverifiable acceptance criteria
   les off [provider]          disable one or all providers
   les doctor                  show install, routing, and update status
@@ -113,7 +113,7 @@ function parseArgs(argv) {
     throw new Error(command + " requires codex, claude-code, gemini-cli, or antigravity.");
   }
   if (command === "lint" && !providers.length) throw new Error("lint requires at least one Markdown file.");
-  if (command === "guard" && !(["on", "off"].includes(providers[0]) && (providers.length === 1 || providers.length === 2 && providers[1] === "codex"))) throw new Error("guard requires on or off, optionally followed by codex.");
+  if (command === "guard" && !(["on", "off"].includes(providers[0]) && (providers.length === 1 || providers.length === 2 && ["codex", "gemini"].includes(providers[1])))) throw new Error("guard requires on or off, optionally followed by codex or gemini.");
   if (!["lint", "guard"].includes(command)) for (const name of providers) if (!supportedProviders.some((entry) => entry.name === name)) throw new Error("Unknown provider: " + name);
   return { command, options, provider, providers };
 }
@@ -929,7 +929,12 @@ async function lint(files) {
   return count ? 1 : 0;
 }
 
-const guardSettingsByHost = { claude: ".claude/settings.local.json", codex: ".codex/hooks.json" };
+// Codex and Gemini CLI have no matching Edit/Write tool names or Read gate to observe, so they get the risky-call check only (--no-gate).
+const guardHosts = {
+  claude: { label: "Claude Code", file: ".claude/settings.local.json", before: "PreToolUse", matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", start: "startup|resume|clear|compact", flags: "" },
+  codex: { label: "Codex", file: ".codex/hooks.json", before: "PreToolUse", matcher: "Bash", start: "startup|resume|clear|compact", flags: " --no-gate", note: "Codex skips new hooks until trusted: run /hooks in Codex and trust them." },
+  gemini: { label: "Gemini CLI", file: ".gemini/settings.json", before: "BeforeTool", matcher: "run_shell_command|read_file", start: "*", flags: " --host gemini" }
+};
 
 // Keep personal settings out of `git status` without touching tracked files; skipped outside a git repo.
 async function excludeLocally(entry) {
@@ -945,19 +950,19 @@ async function excludeLocally(entry) {
 async function guard(root, enabled, options, host = "claude") {
   const script = join(root, "adapters", "claude-code", "guard.mjs");
   if (enabled && !await exists(script)) throw new Error("Guard script is missing: " + script);
-  const guardSettings = guardSettingsByHost[host];
+  const { label, file: guardSettings, before, matcher, start, flags, note } = guardHosts[host];
   const path = join(process.cwd(), guardSettings);
   let settings = {};
   if (await exists(path)) {
     try { settings = JSON.parse(await readFile(path, "utf8")); } catch { throw new Error(guardSettings + " is not valid JSON; fix it before running les guard."); }
   }
   const isGuard = (entry) => entry?.hooks?.some((hook) => /adapters[\\/]claude-code[\\/]guard\.mjs"/u.test(String(hook.command)));
-  const command = "node \"" + script + "\"" + (host === "codex" ? " --no-gate" : "");
+  const command = "node \"" + script + "\"" + flags;
   const entries = {
-    PreToolUse: { matcher: host === "codex" ? "Bash" : "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", hooks: [{ type: "command", command }] },
-    SessionStart: { matcher: "startup|resume|clear|compact", hooks: [{ type: "command", command: command + " session-start" }] }
+    [before]: { matcher, hooks: [{ type: "command", command }] },
+    SessionStart: { matcher: start, hooks: [{ type: "command", command: command + " session-start" }] }
   };
-  printPlan("guard " + (enabled ? "on" : "off"), path, [enabled ? "block risky calls" + (host === "codex" ? "" : ", and block Edit, Write, and Bash until the LES bootstrap files are read each session") + ", with " + script : "remove the LES guard hooks"]);
+  printPlan("guard " + (enabled ? "on" : "off"), path, [enabled ? "block risky calls" + (host === "claude" ? ", and block Edit, Write, and Bash until the LES bootstrap files are read each session" : "") + ", with " + script : "remove the LES guard hooks"]);
   if (options.dryRun) return;
   settings.hooks = { ...settings.hooks };
   for (const [event, entry] of Object.entries(entries)) {
@@ -969,8 +974,8 @@ async function guard(root, enabled, options, host = "claude") {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(settings, null, 2) + "\n");
   if (enabled) await excludeLocally(guardSettings);
-  console.log("Guard " + (enabled ? "enabled" : "disabled") + " for " + (host === "codex" ? "Codex" : "Claude Code") + " in " + guardSettings + ".");
-  if (enabled && host === "codex") console.log("Codex skips new hooks until trusted: run /hooks in Codex and trust them.");
+  console.log("Guard " + (enabled ? "enabled" : "disabled") + " for " + label + " in " + guardSettings + ".");
+  if (enabled && note) console.log(note);
 }
 
 async function doctor() {
@@ -1068,7 +1073,7 @@ try {
   } else if (command === "connect") {
     await connect(options, providers);
   } else if (command === "guard") {
-    await guard(await requireUserStore(), providers[0] === "on", options, providers[1] === "codex" ? "codex" : "claude");
+    await guard(await requireUserStore(), providers[0] === "on", options, providers[1] || "claude");
   } else if (command === "lint") {
     process.exitCode = await lint(providers);
   } else if (command === "update") {
