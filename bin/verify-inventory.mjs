@@ -102,6 +102,17 @@ for (const workflow of inventory.workflows) {
   if (!inventory.skills.some((skill) => routeSkills.has(skill.name) && skillWorkflowLoads.get(skill.name)?.has(workflow))) fail("workflow has no route consumer: " + workflow);
 }
 
+// The bootstrap load list, inventory kernel, and policies README kernel order must name the same policies, and the guard must parse the list.
+const bootstrapLoads = JSON.parse(frontmatter(await readFile(join(root, "skills/les-bootstrap/SKILL.md"), "utf8")).loads);
+const kernelPolicies = bootstrapLoads.map((path) => rel(resolve(root, "skills/les-bootstrap", path))).filter((path) => /^policies\/[^/]+\.md$/u.test(path));
+const policiesReadme = await readFile(join(root, "policies/README.md"), "utf8");
+for (const path of kernelPolicies) {
+  if (!inventory.kernel.includes(path)) fail("bootstrap policy missing from inventory kernel: " + path);
+  if (!policiesReadme.includes("`" + path.slice("policies/".length) + "`")) fail("bootstrap policy missing from policies/README.md kernel order: " + path);
+}
+for (const path of inventory.kernel) if (path !== "policies/README.md" && !kernelPolicies.includes(path)) fail("inventory kernel policy is not loaded by the bootstrap: " + path);
+if ((await import("../adapters/claude-code/guard.mjs")).required().length !== bootstrapLoads.length + 2) fail("guard cannot parse the bootstrap loads list");
+
 const lifecycle = await readFile(join(root, "policies/lifecycle.md"), "utf8");
 const lifecycleSteps = lifecycle.split(/^## \d+\. /mu).slice(1);
 if (lifecycleSteps.length !== 17) fail("lifecycle must contain 17 phases");

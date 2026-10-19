@@ -3,7 +3,7 @@
   "kernel": [
     "policies/README.md", "policies/principles.md", "policies/precedence.md",
     "policies/lifecycle.md", "policies/risk-model.md", "policies/memory-model.md",
-    "policies/verification.md"
+    "policies/verification.md", "policies/workflow-contracts.md"
   ],
   "rules": [
     {"name":"ai-authority","owner":"LES","status":"required","activation":"every task","path":"policies/rules/ai-authority.md"},
