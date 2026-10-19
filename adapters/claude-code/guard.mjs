@@ -90,6 +90,18 @@ export function gate(call) {
 export const hookCap = 10000;
 const reminder = "Before editing: state context trace, risk, and acceptance. Write the test first. Review the final diff. End every task-scoped reply with the LES status footer.";
 
+// Stop hook: a turn that used tools is task work and must end with the LES status footer; plain chat turns are left alone.
+const turnLog = (id) => join(tmpdir(), "les-turn-" + String(id).replace(/[^\w-]/gu, "_"));
+const footer = /^LES status: (?:COMPLETE\s+Session: CLOSEABLE|(?:BLOCKED|PENDING_USER_ACTION|FAILED|SKIPPED)\s+Session: KEEP_OPEN)\b/mu;
+
+export function stop(call) {
+  if (!call.session_id) return undefined;
+  const worked = existsSync(turnLog(call.session_id));
+  rmSync(turnLog(call.session_id), { force: true });
+  if (call.stop_hook_active || !worked || footer.test(String(call.last_assistant_message || ""))) return undefined;
+  return "End the reply with the LES status footer from policies/workflow-contracts.md: 'LES status: <COMPLETE|BLOCKED|PENDING_USER_ACTION|FAILED|SKIPPED>', then 'Session: CLOSEABLE' for COMPLETE or 'Session: KEEP_OPEN' otherwise, then 'Next safe action: ...'.";
+}
+
 // The bootstrap skill body plus every policy it loads, minus front matter. Empty when a file is unreadable.
 export function bootstrapText(files = required()) {
   try { return files.slice(1).map((file) => readFileSync(file, "utf8").replace(/^---\n[\s\S]*?\n---\n/u, "").trim()).join("\n\n"); } catch { return ""; }
@@ -126,12 +138,21 @@ if (realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url
     process.exit(0);
   }
   if (!call) process.exit(0);
+  if (process.argv.includes("stop")) {
+    const missingFooter = stop(call);
+    if (missingFooter) {
+      console.error("LES guard: " + missingFooter);
+      process.exit(2);
+    }
+    process.exit(0);
+  }
   if (gemini) call.tool_name = { run_shell_command: "Bash", read_file: "Read" }[call.tool_name] || call.tool_name;
   const reason = check(call, resolve(process.env.CLAUDE_PROJECT_DIR || call.cwd || process.cwd()));
   if (reason) {
     console.error("LES guard blocked this call: " + reason + ". Ask the user to run it or approve it explicitly.");
     process.exit(2);
   }
+  if (call.session_id) appendFileSync(turnLog(call.session_id), "x"); // marks the turn as task work for the Stop hook
   const missing = noGate ? undefined : gate(call);
   if (missing) {
     console.error("LES guard blocked this call: " + missing);

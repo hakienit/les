@@ -480,6 +480,27 @@ test("guard blocks Edit, Write, and Bash until every bootstrap file is read when
   await rm(store, { recursive: true, force: true });
 });
 
+test("guard stop sends a task reply back once when the LES status footer is missing or inconsistent", () => {
+  const session_id = "les-stop-" + process.pid;
+  const stop = (extra) => spawnSync(process.execPath, [guardScript, "stop"], { encoding: "utf8", input: JSON.stringify({ session_id, ...extra }) });
+  const work = () => guardRun({ session_id, ...bash("ls") }, "/work/app");
+  const done = "Done.\n\nLES status: COMPLETE\nSession: CLOSEABLE\nNext safe action: none";
+  assert.equal(stop({ last_assistant_message: "hello" }).status, 0, "chat turns are left alone");
+  work();
+  const missing = stop({ last_assistant_message: "Done." });
+  assert.equal(missing.status, 2);
+  assert.ok(missing.stderr.includes("LES status footer"), missing.stderr);
+  assert.equal(stop({ last_assistant_message: "Done." }).status, 0, "marker is cleared after each Stop");
+  work();
+  assert.equal(stop({ last_assistant_message: "Done.", stop_hook_active: true }).status, 0, "never loops");
+  work();
+  assert.equal(stop({ last_assistant_message: done }).status, 0);
+  work();
+  assert.equal(stop({ last_assistant_message: done.replace("CLOSEABLE", "KEEP_OPEN") }).status, 2, "COMPLETE must be CLOSEABLE");
+  work();
+  assert.equal(stop({ last_assistant_message: "x\nLES status: BLOCKED\nSession: KEEP_OPEN\nNext safe action: ask" }).status, 0);
+});
+
 test("guard --host gemini maps Gemini tool names to the same verdicts and emits SessionStart context as JSON", () => {
   const gemini = (tool_name, tool_input) => spawnSync(process.execPath, [guardScript, "--host", "gemini"], { encoding: "utf8", input: JSON.stringify({ session_id: "gemini-" + process.pid, cwd: "/work/app", tool_name, tool_input }), env: { ...process.env, HOME: "/home/tester", CLAUDE_PROJECT_DIR: "/work/app" } }).status;
   for (const command of ["cat .env", "rm -rf ../other", "git push --force origin main"]) assert.equal(gemini("run_shell_command", { command }), 2, command);
@@ -524,6 +545,8 @@ test("guard on and off merge into settings.local.json without touching other hoo
     assert.equal(exclude.filter((line) => line === ".claude/settings.local.json").length, 1);
     assert.equal(execFileSync("git", ["status", "--short"], { cwd: project, encoding: "utf8" }).includes(".claude"), false);
     assert.equal(on.hooks.PreToolUse[1].hooks[0].command, `node "${join(home, "adapters", "claude-code", "guard.mjs")}"`);
+    assert.equal(on.hooks.Stop.length, 1);
+    assert.equal(on.hooks.Stop[0].hooks[0].command, `node "${join(home, "adapters", "claude-code", "guard.mjs")}" stop`);
     assert.equal(on.hooks.SessionStart.length, 1);
     assert.equal(on.hooks.SessionStart[0].hooks[0].command, `node "${join(home, "adapters", "claude-code", "guard.mjs")}" session-start`);
 
@@ -531,6 +554,7 @@ test("guard on and off merge into settings.local.json without touching other hoo
     const off = JSON.parse(await readFile(settings, "utf8"));
     assert.deepEqual(off.hooks.PreToolUse, [other]);
     assert.equal(off.hooks.SessionStart, undefined);
+    assert.equal(off.hooks.Stop, undefined);
 
     const codexHooks = join(project, ".codex", "hooks.json");
     const script = join(home, "adapters", "claude-code", "guard.mjs");

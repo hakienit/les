@@ -931,7 +931,7 @@ async function lint(files) {
 
 // Codex and Gemini CLI have no matching Edit/Write tool names or Read gate to observe, so they get the risky-call check only (--no-gate).
 const guardHosts = {
-  claude: { label: "Claude Code", file: ".claude/settings.local.json", before: "PreToolUse", matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", start: "startup|resume|clear|compact", flags: "" },
+  claude: { label: "Claude Code", file: ".claude/settings.local.json", before: "PreToolUse", matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", start: "startup|resume|clear|compact", flags: "", stop: true },
   codex: { label: "Codex", file: ".codex/hooks.json", before: "PreToolUse", matcher: "Bash", start: "startup|resume|clear|compact", flags: " --no-gate", note: "Codex skips new hooks until trusted: run /hooks in Codex and trust them." },
   gemini: { label: "Gemini CLI", file: ".gemini/settings.json", before: "BeforeTool", matcher: "run_shell_command|read_file", start: "*", flags: " --host gemini" }
 };
@@ -950,7 +950,7 @@ async function excludeLocally(entry) {
 async function guard(root, enabled, options, host = "claude") {
   const script = join(root, "adapters", "claude-code", "guard.mjs");
   if (enabled && !await exists(script)) throw new Error("Guard script is missing: " + script);
-  const { label, file: guardSettings, before, matcher, start, flags, note } = guardHosts[host];
+  const { label, file: guardSettings, before, matcher, start, flags, note, stop } = guardHosts[host];
   const path = join(process.cwd(), guardSettings);
   let settings = {};
   if (await exists(path)) {
@@ -960,9 +960,10 @@ async function guard(root, enabled, options, host = "claude") {
   const command = "node \"" + script + "\"" + flags;
   const entries = {
     [before]: { matcher, hooks: [{ type: "command", command }] },
-    SessionStart: { matcher: start, hooks: [{ type: "command", command: command + " session-start" }] }
+    SessionStart: { matcher: start, hooks: [{ type: "command", command: command + " session-start" }] },
+    ...stop && { Stop: { hooks: [{ type: "command", command: command + " stop" }] } }
   };
-  printPlan("guard " + (enabled ? "on" : "off"), path, [enabled ? "block risky calls" + (host === "claude" ? ", and block Edit, Write, and Bash until the LES bootstrap files are read each session" : "") + ", with " + script : "remove the LES guard hooks"]);
+  printPlan("guard " + (enabled ? "on" : "off"), path, [enabled ? "block risky calls" + (host === "claude" ? ", block Edit, Write, and Bash until the LES bootstrap files are read each session, and send back task replies that lack the LES status footer" : "") + ", with " + script : "remove the LES guard hooks"]);
   if (options.dryRun) return;
   settings.hooks = { ...settings.hooks };
   for (const [event, entry] of Object.entries(entries)) {

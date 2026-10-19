@@ -41,7 +41,7 @@ Run `npx` outside a checkout of this repository, then open a new terminal so
 | `les connect [provider...] [--all]` | Create `LES-AGENT.md` and the pointer files for detected CLIs. |
 | `les on`, `les off [provider]` | Enable or disable routing. |
 | `les doctor` | Check the install, the repository pointers, and for updates. |
-| `les guard on`, `les guard off` | Claude Code hooks: block secret reads, deletes outside the project, and force pushes to protected branches, and gate edits until the bootstrap is read. The session-start hook injects the bootstrap (under the 10,000-character hook cap) so nothing needs reading. A guardrail, not a sandbox. |
+| `les guard on`, `les guard off` | Claude Code hooks: block secret reads, deletes outside the project, and force pushes to protected branches, and gate edits until the bootstrap is read. The session-start hook injects the bootstrap (under the 10,000-character hook cap) so nothing needs reading. A Stop hook sends back, once, a reply that used tools but lacks the LES status footer. A guardrail, not a sandbox. |
 | `les guard on codex`, `les guard off codex` | Same risky-call blocks for Codex shell commands in `.codex/hooks.json`, without the bootstrap read gate. Trust the hooks with `/hooks` in Codex. |
 | `les guard on gemini`, `les guard off gemini` | Same for Gemini CLI shell and file reads in `.gemini/settings.json`, without the read gate. |
 | `les lint FILE...` | Flag placeholders and unmeasurable acceptance criteria in a spec. |
