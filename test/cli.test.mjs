@@ -562,8 +562,13 @@ test("guard on and off merge into settings.local.json without touching other hoo
     assert.equal(on.hooks.Stop[0].hooks[0].command, `node "${join(home, "adapters", "claude-code", "guard.mjs")}" stop`);
     assert.equal(on.hooks.SessionStart.length, 1);
     assert.equal(on.hooks.SessionStart[0].hooks[0].command, `node "${join(home, "adapters", "claude-code", "guard.mjs")}" session-start`);
+    assert.equal(run(["init"], project, env).status, 0);
+    assert.match(run(["doctor"], project, env).stdout, /\[READY\] guard/);
 
     assert.equal(run(["guard", "off"], project, env).status, 0);
+    const offDoctor = run(["doctor"], project, env);
+    assert.match(offDoctor.stdout, /\[FALLBACK\] guard: off.*les guard on/);
+    assert.equal(offDoctor.status, 0, "guard off is a warning, not a failure");
     const off = JSON.parse(await readFile(settings, "utf8"));
     assert.deepEqual(off.hooks.PreToolUse, [other]);
     assert.equal(off.hooks.SessionStart, undefined);

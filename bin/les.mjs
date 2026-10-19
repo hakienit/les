@@ -568,6 +568,7 @@ async function init(options) {
   if (!await exists(path)) await writeAgentState(state);
   console.log("Initialized LES for this repository.");
   console.log("Next: les connect");
+  console.log("Recommended for Claude Code: les guard on. Without it nothing injects the bootstrap or enforces the status footer, so the agent must follow LES-AGENT.md alone.");
 }
 
 async function update(target, options) {
@@ -1014,6 +1015,11 @@ async function doctor() {
       statuses.push(missing.length
         ? doctorLine("PENDING_USER_ACTION", "bootstrap-pointer", "LES-AGENT.md points to missing ~/.les-agents/" + missing.join(", ") + "; update the pointer")
         : doctorLine("READY", "bootstrap-pointer", "LES-AGENT.md pointers resolve in the user store"));
+      // Without the guard no hook injects the bootstrap or enforces the status footer; the agent alone must follow LES-AGENT.md.
+      const guardOn = /adapters[\\/]claude-code[\\/]guard\.mjs\\?"/u.test(await readFile(join(process.cwd(), guardHosts.claude.file), "utf8").catch(() => ""));
+      statuses.push(guardOn
+        ? doctorLine("READY", "guard", "Claude Code hooks inject the bootstrap and enforce the status footer")
+        : doctorLine("FALLBACK", "guard", "off: nothing injects the bootstrap or enforces the status footer in Claude Code; run les guard on"));
     } catch {
       statuses.push(doctorLine("BLOCKED", "repository", "LES-AGENT.md is not LES-managed"));
     }
