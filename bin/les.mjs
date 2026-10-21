@@ -1077,7 +1077,8 @@ async function doctor() {
         ? doctorLine("PENDING_USER_ACTION", "bootstrap-pointer", "LES-AGENT.md points to missing ~/.les-agents/" + missing.join(", ") + "; update the pointer")
         : doctorLine("READY", "bootstrap-pointer", "LES-AGENT.md pointers resolve in the user store"));
       // Without the guard no hook injects the bootstrap or enforces the status footer; the agent alone must follow LES-AGENT.md.
-      const guardOn = /adapters[\\/]claude-code[\\/]guard\.mjs\\?"/u.test(await readFile(join(process.cwd(), guardHosts.claude.file), "utf8").catch(() => ""));
+      // Raw JSON escapes Windows separators as "\\", so allow repeated separators.
+      const guardOn = /adapters[\\/]+claude-code[\\/]+guard\.mjs\\?"/u.test(await readFile(join(process.cwd(), guardHosts.claude.file), "utf8").catch(() => ""));
       statuses.push(guardOn
         ? doctorLine("READY", "guard", "Claude Code hooks inject the bootstrap and enforce the status footer")
         : doctorLine("FALLBACK", "guard", "off: nothing injects the bootstrap or enforces the status footer in Claude Code; run les guard on"));
