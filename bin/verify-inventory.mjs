@@ -115,6 +115,24 @@ const guardModule = await import("../adapters/claude-code/guard.mjs");
 if (guardModule.required().length !== bootstrapLoads.length + 2) fail("guard cannot parse the bootstrap loads list");
 // The session-start hook injects the bootstrap only while it fits the host's hook output cap.
 else if (!guardModule.sessionStart().startsWith("LES bootstrap")) fail("bootstrap no longer fits the " + guardModule.hookCap + "-character session-start cap; trim policies or the bootstrap skill");
+const owners = new Map();
+const departmentIds = new Set();
+for (const department of inventory.departments || []) {
+  for (const field of ["id", "name", "tier", "access", "description", "skills"]) if (!department[field]) fail("department metadata missing " + field);
+  if (departmentIds.has(department.id)) fail("duplicate department: " + department.id);
+  departmentIds.add(department.id);
+  if (!/^[a-z]+$/u.test(department.id)) fail("department id must be lowercase letters: " + department.id);
+  if (!["session", "fast", "standard", "deep"].includes(department.tier) || (department.tier === "session") !== (department.id === "lead")) fail("invalid department tier: " + department.id);
+  if (!["read", "write"].includes(department.access)) fail("invalid department access: " + department.id);
+  for (const name of department.skills || []) {
+    if (!names.has(name)) fail("department references unknown skill: " + department.id + "/" + name);
+    if (owners.has(name)) fail("skill owned by two departments: " + name);
+    owners.set(name, department.id);
+  }
+}
+if (!departmentIds.has("lead") || owners.get("les-bootstrap") !== "lead") fail("the lead department must own les-bootstrap");
+for (const name of names) if (!owners.has(name)) fail("skill has no owning department: " + name);
+try { await access(join(root, inventory.team)); } catch { fail("team policy missing: " + inventory.team); }
 
 const lifecycle = await readFile(join(root, "policies/lifecycle.md"), "utf8");
 const lifecycleSteps = lifecycle.split(/^## \d+\. /mu).slice(1);

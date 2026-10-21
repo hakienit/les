@@ -47,7 +47,7 @@ A read-only review or audit reports findings and coverage without modifying
 files. It can be `COMPLETE` while the reviewed change needs fixes; correction
 requires implementation authority.
 
-Review findings are defined in `workflows/review.md`; parallel-work rules are in `workflows/handoff-recovery.md`.
+Review findings are defined in `workflows/review.md`; parallel-work rules are in `workflows/handoff-recovery.md`; departments and dispatch rungs are in `team.md`.
 
 ## Terminal statuses
 

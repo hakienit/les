@@ -23,7 +23,7 @@ Request, runtime constraints, project entrypoint, and current work state.
 
 1. Resolve precedence and the task route. Done when: one route, near-miss interpretation, and fallback are selected.
 2. Reconstruct relevant project context, active work state, and repository identity. Done when: scope, ownership, and stale evidence are named.
-3. Classify risk, authority, active profile, and verification tier. Done when: approval and evidence gates are explicit.
+3. Classify risk, authority, active profile, verification tier, and team rung. Done when: approval and evidence gates are explicit and any dispatched department has a brief.
 4. Report the next safe action and context trace. Done when: terminal evidence, residual uncertainty, and status are defined.
 
 ## Output
@@ -36,7 +36,7 @@ For task-scoped responses, use the closeability footer defined in
 
 ## Guardrails
 
-Do not grant authority, duplicate policy, or load inactive profiles. Load the rules the task activates and one workflow from `../../policies/workflows/`; use `task-lifecycle.md` when none matches. Stop before dependent work when precedence is unresolved or required authority is absent.
+Do not grant authority, duplicate policy, or load inactive profiles. Load the rules the task activates and one workflow from `../../policies/workflows/`; use `task-lifecycle.md` when none matches. Load `../../policies/team.md` only when the task is R1 and multi-step, R2 or higher, or spans routes. Stop before dependent work when precedence is unresolved or required authority is absent.
 
 ## Verification
 

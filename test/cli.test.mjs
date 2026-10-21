@@ -533,6 +533,46 @@ test("guard --no-gate (Codex) blocks risky Bash like Claude Code but never gates
   assert.ok(out.includes("status footer") && !out.includes("are blocked until"));
 });
 
+test("team on and off manage one subagent per department without touching user agents", async () => {
+  const project = await mkdtemp(join(tmpdir(), "les-cli-team-"));
+  const home = await mkdtemp(join(tmpdir(), "les-cli-team-home-"));
+  try {
+    const env = { LES_HOME: home, LES_DISABLE_PATH_SETUP: "1" };
+    assert.equal(run([], project, env).status, 0);
+    execFileSync("git", ["init", "-q"], { cwd: project });
+    const agents = join(project, ".claude", "agents");
+    await mkdir(agents, { recursive: true });
+    await writeFile(join(agents, "les-review.md"), "mine");
+    await writeFile(join(agents, "other.md"), "other");
+    const departments = JSON.parse(await readFile(join(root, "inventory.yaml"), "utf8")).departments.filter((department) => department.id !== "lead");
+
+    assert.equal(run(["team", "on", "--dry-run"], project, env).status, 0);
+    assert.deepEqual((await readdir(agents)).sort(), ["les-review.md", "other.md"]);
+    assert.equal(run(["team", "on"], project, env).status, 0);
+    assert.equal(run(["team", "on"], project, env).status, 0);
+    assert.equal(await readFile(join(agents, "les-review.md"), "utf8"), "mine");
+    assert.equal((await readdir(agents)).length, departments.length + 1);
+    const engineering = await readFile(join(agents, "les-engineering.md"), "utf8");
+    assert.match(engineering, /^---\nname: les-engineering\n/u);
+    assert.match(engineering, /\nmodel: sonnet\n/u);
+    assert.doesNotMatch(engineering, /\ntools:/u);
+    assert.ok(engineering.includes(join(home, "skills", "les-feature-delivery", "SKILL.md")));
+    const scout = await readFile(join(agents, "les-scout.md"), "utf8");
+    assert.match(scout, /\nmodel: haiku\ntools: Read, Grep, Glob, Bash\n---\n/u);
+    assert.match(scout, /read-only/u);
+    assert.match(await readFile(join(agents, "les-security.md"), "utf8"), /\nmodel: opus\n/u);
+    const exclude = (await readFile(join(project, ".git", "info", "exclude"), "utf8")).split("\n");
+    assert.equal(exclude.filter((line) => line === ".claude/agents/les-*.md").length, 1);
+
+    assert.equal(run(["team", "off"], project, env).status, 0);
+    assert.deepEqual((await readdir(agents)).sort(), ["les-review.md", "other.md"]);
+    assert.notEqual(run(["team"], project, env).status, 0);
+  } finally {
+    await rm(project, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
 test("guard on and off merge into settings.local.json without touching other hooks", async () => {
   const project = await mkdtemp(join(tmpdir(), "les-cli-guard-"));
   const home = await mkdtemp(join(tmpdir(), "les-cli-guard-home-"));

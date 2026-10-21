@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- LES now works as a team of departments. `policies/team.md` defines a Lead and nine departments (Product, Architecture, Engineering, Frontend, QA, Security, Review, DevOps, Scout), each owning a set of skills and a model tier (`fast`, `standard`, `deep`). The Lead picks the lowest dispatch rung that fits the risk: solo, pair, squad, touchpoints, or R3. Departments work from a short brief and return a compact report, and a writer never reviews its own change. `les-bootstrap` loads the team policy only for R1 multi-step work or higher.
+- `inventory.yaml` lists the departments, and `verify-inventory` checks that every skill has exactly one owner.
+- `les team on` writes one Claude Code subagent per department to `.claude/agents/les-<id>.md`: `haiku` for `fast`, `sonnet` for `standard`, `opus` for `deep`. Read-only departments get only `Read`, `Grep`, `Glob`, and `Bash`. It never overwrites an agent file it did not write, and it keeps the generated files out of git. `les team off` removes them.
+
 ## 1.5.0 - 2026-10-19
 
 - `les doctor` reports the Claude Code guard: `READY` when `les guard on` is active, `FALLBACK` (exit code unchanged) when it is off, since nothing then injects the bootstrap or enforces the status footer.
@@ -14,6 +20,7 @@
 - Fail closed: `les guard on` sets `onFailure: "block"` on the PreToolUse hook (Claude Code 2.1.295 or later), so a missing or crashing guard blocks the call. Run `les guard off` in a normal terminal to remove it. Session start warns when the bootstrap `loads` line is unreadable.
 - Fix: the guard compared unresolved paths and silently did nothing when installed behind a symlink.
 - `verify-inventory` now checks that the bootstrap `loads`, the inventory kernel, and `policies/README.md` list the same policies.
+
 ## 1.3.2 - 2026-10-17
 
 - Trim `README.md` to a minimal landing page: install, why, commands, and update.

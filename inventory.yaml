@@ -71,10 +71,23 @@
     {"name":"les-ui-preview-gate","path":"skills/les-ui-preview-gate/SKILL.md","maturity":"stable","invocation":"model","route":"frontend-preview","profile":"frontend","bootstrap":"skills/les-bootstrap/SKILL.md"}
   ],
   "routes": "routes.yaml",
+  "team": "policies/team.md",
+  "departments": [
+    {"id":"lead","name":"Lead","tier":"session","access":"write","description":"Bootstraps, dispatches, integrates, and reports the terminal status.","skills":["les-bootstrap","les-handoff","les-knowledge-promotion","les-retrospective"]},
+    {"id":"product","name":"Product","tier":"standard","access":"write","description":"Clarifies outcomes, writes specifications, models the domain, and triages competing work.","skills":["les-discovery","les-specification","les-domain-modeling","les-work-triage"]},
+    {"id":"architecture","name":"Architecture","tier":"deep","access":"write","description":"Designs boundaries, plans and splits work, researches constraints, probes designs, and decides dependencies.","skills":["les-architecture-design","les-planning","les-task-decomposition","les-technical-research","les-prototyping","les-dependency-change","les-agent-instruction-authoring"]},
+    {"id":"engineering","name":"Engineering","tier":"standard","access":"write","description":"Implements features, fixes defects, refactors, patches, and migrates with test-first proof.","skills":["les-feature-delivery","les-bug-fixing","les-refactoring","les-surgical-patch","les-migration","les-test-first"]},
+    {"id":"frontend","name":"Frontend","tier":"standard","access":"write","description":"Designs and builds user interfaces, gates previews, and assesses experience, accessibility, and frontend performance.","skills":["les-frontend","les-frontend-design","les-ui-preview-gate","les-frontend-performance","les-frontend-experience-review","les-accessibility-review"]},
+    {"id":"qa","name":"QA","tier":"fast","access":"read","description":"Runs acceptance checks, frontend verification, and repository quality gates, and reports evidence.","skills":["les-verification","les-frontend-verification","les-repository-quality-gates"]},
+    {"id":"security","name":"Security","tier":"deep","access":"read","description":"Reviews auth, permissions, secrets, and sensitive-data boundaries.","skills":["les-security-review"]},
+    {"id":"review","name":"Review","tier":"deep","access":"read","description":"Reviews changes and plans against acceptance and audits quality, independent of the writer.","skills":["les-review","les-quality-audit"]},
+    {"id":"devops","name":"DevOps","tier":"standard","access":"write","description":"Handles git safety, merge conflicts, release readiness, incidents, runbooks, and workspace isolation.","skills":["les-git-safety","les-merge-conflict","les-release-readiness","les-incident-hotfix","les-operator-runbook","les-workspace-isolation"]},
+    {"id":"scout","name":"Scout","tier":"fast","access":"read","description":"Locates code and investigates unknown behavior so wide reads stay cheap.","skills":["les-investigation"]}
+  ],
   "files": [
     "package.json", "README.md", "CHANGELOG.md", "LICENSE", "inventory.yaml", "routes.yaml",
     "bin/les", "bin/les.cmd", "bin/les.mjs", "bin/verify-inventory.mjs", "bin/verify-release.mjs", "bin/generate-adapter-manifests.mjs",
-    "policies/README.md", "policies/principles.md", "policies/precedence.md", "policies/lifecycle.md", "policies/risk-model.md", "policies/memory-model.md", "policies/verification.md", "policies/workflow-contracts.md",
+    "policies/README.md", "policies/principles.md", "policies/precedence.md", "policies/lifecycle.md", "policies/risk-model.md", "policies/memory-model.md", "policies/verification.md", "policies/workflow-contracts.md", "policies/team.md",
     "policies/rules/ai-authority.md", "policies/rules/architecture.md", "policies/rules/coding-quality.md", "policies/rules/testing.md", "policies/rules/security.md", "policies/rules/git-safety.md", "policies/rules/dependencies.md", "policies/rules/technical-decisions.md", "policies/rules/file-organization.md", "policies/rules/documentation.md", "policies/rules/error-handling.md", "policies/rules/context-loading.md", "policies/rules/definition-of-done.md", "policies/rules/change-scope.md",
     "policies/workflows/task-lifecycle.md", "policies/workflows/feature-delivery.md", "policies/workflows/bug-fixing.md", "policies/workflows/refactoring.md", "policies/workflows/investigation.md", "policies/workflows/incident-hotfix.md", "policies/workflows/review.md", "policies/workflows/verification.md", "policies/workflows/handoff-recovery.md", "policies/workflows/knowledge-promotion.md",
     "skills/README.md", "skills/les-bootstrap/SKILL.md", "skills/les-discovery/SKILL.md", "skills/les-planning/SKILL.md", "skills/les-specification/SKILL.md", "skills/les-task-decomposition/SKILL.md",
