@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## 1.6.0 - 2026-10-21
 
 - LES now works as a team of departments. `policies/team.md` defines a Lead and nine departments (Product, Architecture, Engineering, Frontend, QA, Security, Review, DevOps, Scout), each owning a set of skills and a model tier (`fast`, `standard`, `deep`). The Lead picks the lowest dispatch rung that fits the risk: solo, pair, squad, touchpoints, or R3. Departments work from a short brief and return a compact report, and a writer never reviews its own change. `les-bootstrap` loads the team policy only for R1 multi-step work or higher.
 - `inventory.yaml` lists the departments, and `verify-inventory` checks that every skill has exactly one owner.
 - `les team on` writes one Claude Code subagent per department to `.claude/agents/les-<id>.md`: `haiku` for `fast`, `sonnet` for `standard`, `opus` for `deep`. Read-only departments get only `Read`, `Grep`, `Glob`, and `Bash`. It never overwrites an agent file it did not write, and it keeps the generated files out of git. `les team off` removes them.
+- Fix Windows: `les doctor` now detects an active Claude Code guard. It reported `FALLBACK` because the hook path in `settings.local.json` has JSON-escaped backslashes.
 
 ## 1.5.0 - 2026-10-19
 
