@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.0 - 2026-10-22
+
+- `les connect` takes no provider names and has no picker: it connects every provider (Codex, Claude Code, Gemini CLI, Antigravity). It skips, with a warning, a provider entrypoint the project already owns instead of failing. It replaces `les on`.
+- `les connect` also turns the guard on for Claude Code, Codex, and Gemini CLI, and writes the Claude Code team agents. `les guard on|off`, `les team on|off`, and `les lint` stay for finer control.
+- `les status` is an alias for `les doctor`, and `les version` prints the version. `les update` runs `npx -y @hakienit/les@latest`, so it installs the newest published version. Bare `les` still installs from the running package.
+- Remove `les off` and the legacy repo-payload commands (`add`, `diff`, `rollback`, `update --scope repo`).
+- `tools/behavior-eval.mjs` writes the provider pointer itself instead of calling `les on`.
+
 ## 1.6.0 - 2026-10-21
 
 - LES now works as a team of departments. `policies/team.md` defines a Lead and nine departments (Product, Architecture, Engineering, Frontend, QA, Security, Review, DevOps, Scout), each owning a set of skills and a model tier (`fast`, `standard`, `deep`). The Lead picks the lowest dispatch rung that fits the risk: solo, pair, squad, touchpoints, or R3. Departments work from a short brief and return a compact report, and a writer never reviews its own change. `les-bootstrap` loads the team policy only for R1 multi-step work or higher.
