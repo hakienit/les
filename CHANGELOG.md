@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.1 - 2026-10-22
+
+- Fix the command hints. `les doctor` now says `run les connect` for a repository that is not set up, `run les guard on` when the guard is off, and `run les update` for store drift. The install, usage, and README lines use `npx -y @hakienit/les@latest`, since the untagged form can reuse an old cached copy.
+- Error messages for a missing manifest or `LES-AGENT.md` name the command that fixes it. A successful install prints `Next: run les connect in a repository.`.
+
 ## 1.7.0 - 2026-10-22
 
 - `les connect` takes no provider names and has no picker: it connects every provider (Codex, Claude Code, Gemini CLI, Antigravity). It skips, with a warning, a provider entrypoint the project already owns instead of failing. It replaces `les on`.
