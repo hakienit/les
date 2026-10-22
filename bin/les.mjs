@@ -40,7 +40,7 @@ Usage:
 Options: --dry-run, --version
 
 Install from npm:
-  npx -y @hakienit/les
+  npx -y @hakienit/les@latest
 
 The installer persists the LES command in the user PATH. Open a new terminal
 after the first install.`);
@@ -293,7 +293,7 @@ async function readManifest(target) {
   const currentPath = join(target, manifestFilename);
   const legacyPath = join(target, "les-manifest.json");
   const manifestPath = await exists(currentPath) ? currentPath : legacyPath;
-  if (!await exists(manifestPath)) throw new Error("No LES manifest at " + target + ". Run the LES installer first.");
+  if (!await exists(manifestPath)) throw new Error("No LES manifest at " + target + ". Run npx -y @hakienit/les@latest first.");
   const manifest = parseManifest(await readFile(manifestPath, "utf8"));
   if (manifest.packageName !== packageMetadata.name || !Array.isArray(manifest.managed)) {
     throw new Error("The existing manifest is not a compatible LES installation.");
@@ -364,7 +364,7 @@ function parseAgentState(source) {
 
 async function readAgentState() {
   const path = localAgentPath();
-  if (!await exists(path)) throw new Error("No " + agentFilename + " in this repo. Run les init first.");
+  if (!await exists(path)) throw new Error("No " + agentFilename + " in this repo. Run les connect first.");
   return parseAgentState(await readFile(path, "utf8"));
 }
 
@@ -573,7 +573,7 @@ async function guard(root, enabled, options, host = "claude") {
   const path = join(process.cwd(), guardSettings);
   let settings = {};
   if (await exists(path)) {
-    try { settings = JSON.parse(await readFile(path, "utf8")); } catch { throw new Error(guardSettings + " is not valid JSON; fix it before running les guard."); }
+    try { settings = JSON.parse(await readFile(path, "utf8")); } catch { throw new Error(guardSettings + " is not valid JSON; fix it, then rerun the command."); }
   }
   const isGuard = (entry) => entry?.hooks?.some((hook) => /adapters[\\/]claude-code[\\/]guard\.mjs"/u.test(String(hook.command)));
   const command = "node \"" + script + "\"" + flags;
@@ -628,7 +628,7 @@ ${skills}
 async function team(root, enabled, options) {
   const inventory = JSON.parse(await readFile(join(root, "inventory.yaml"), "utf8"));
   const departments = (inventory.departments || []).filter((department) => department.id !== "lead");
-  if (enabled && !departments.length) throw new Error("The installed LES has no departments; run npx -y @hakienit/les.");
+  if (enabled && !departments.length) throw new Error("The installed LES has no departments; run les update.");
   const directory = join(process.cwd(), teamAgents);
   const changes = [];
   const actions = [];
@@ -666,12 +666,12 @@ async function doctor() {
     manifest = await readManifest(root);
     statuses.push(doctorLine("READY", "installation", "LES " + manifest.packageVersion + " at " + root));
   } catch {
-    statuses.push(doctorLine("PENDING_USER_ACTION", "installation", "run npx -y @hakienit/les"));
+    statuses.push(doctorLine("PENDING_USER_ACTION", "installation", "run npx -y @hakienit/les@latest"));
   }
   if (manifest) {
     const drift = await storeDrift(root, manifest);
     statuses.push(drift.length
-      ? doctorLine("PENDING_USER_ACTION", "store-integrity", drift.length + " managed file(s) differ: " + drift.slice(0, 3).join(", ") + "; run npx -y @hakienit/les")
+      ? doctorLine("PENDING_USER_ACTION", "store-integrity", drift.length + " managed file(s) differ: " + drift.slice(0, 3).join(", ") + "; run les update")
       : doctorLine("READY", "store-integrity", manifest.managed.length + " managed files match the manifest"));
   }
   statuses.push(doctorLine(await exists(join(root, "policies", "README.md")) ? "READY" : "BLOCKED", "les-policies", "canonical policy kernel"));
@@ -697,12 +697,12 @@ async function doctor() {
       const guardOn = /adapters[\\/]+claude-code[\\/]+guard\.mjs\\?"/u.test(await readFile(join(process.cwd(), guardHosts.claude.file), "utf8").catch(() => ""));
       statuses.push(guardOn
         ? doctorLine("READY", "guard", "Claude Code hooks inject the bootstrap and enforce the status footer")
-        : doctorLine("FALLBACK", "guard", "off: nothing injects the bootstrap or enforces the status footer in Claude Code; run les connect"));
+        : doctorLine("FALLBACK", "guard", "off: nothing injects the bootstrap or enforces the status footer in Claude Code; run les guard on"));
     } catch {
       statuses.push(doctorLine("BLOCKED", "repository", "LES-AGENT.md is not LES-managed"));
     }
   } else {
-    statuses.push(doctorLine("PENDING_USER_ACTION", "repository", "run les init"));
+    statuses.push(doctorLine("PENDING_USER_ACTION", "repository", "run les connect"));
   }
   statuses.push(doctorLine(spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0 ? "READY" : "FALLBACK", "git", "recommended project tool"));
   if (process.env.LES_PROVIDER) {
@@ -760,6 +760,7 @@ try {
     if (!options.dryRun) {
       await installUser(target, true);
       console.log("Installed " + packageMetadata.name + "@" + packageMetadata.version + " in " + target + ".");
+      console.log("Next: run les connect in a repository.");
     }
   } else if (command === "init") {
     await init(options);

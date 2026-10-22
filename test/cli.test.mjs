@@ -113,7 +113,7 @@ test("user install, repo init, routing, and cached update notice work without re
 
     assert.equal(run(["init"], project, env).status, 0);
     assert.match(await readFile(join(project, "LES-AGENT.md"), "utf8"), /~\/\.les-agents/);
-    assert.match(run(["doctor"], project, env).stdout, /\[FALLBACK\] guard: off.*les connect/);
+    assert.match(run(["doctor"], project, env).stdout, /\[FALLBACK\] guard: off.*les guard on/);
     const connected = run(["connect"], project, env);
     assert.equal(connected.status, 0, connected.stderr);
     assert.equal(await readFile(join(project, "AGENTS.md"), "utf8"), "# LES\n\n@./LES-AGENT.md\n");
@@ -637,7 +637,7 @@ test("guard on and off merge into settings.local.json without touching other hoo
 
     assert.equal(run(["guard", "off"], project, env).status, 0);
     const offDoctor = run(["doctor"], project, env);
-    assert.match(offDoctor.stdout, /\[FALLBACK\] guard: off.*les connect/);
+    assert.match(offDoctor.stdout, /\[FALLBACK\] guard: off.*les guard on/);
     assert.equal(offDoctor.status, 0, "guard off is a warning, not a failure");
     const off = JSON.parse(await readFile(settings, "utf8"));
     assert.deepEqual(off.hooks.PreToolUse, [other]);

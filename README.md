@@ -14,7 +14,7 @@ Stop for a human wherever a human must decide.
 </p>
 
 ~~~sh
-npx -y @hakienit/les     # once per machine
+npx -y @hakienit/les@latest     # once per machine
 cd my-project
 les connect              # once per repository
 ~~~
