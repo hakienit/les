@@ -72,7 +72,7 @@ risk, and the next safe action. No narrative, no file dumps, no restated brief.
 
 ## Hosts
 
-With `les team on`, Claude Code gets one subagent per department in
+With `les connect`, Claude Code gets one subagent per department in
 `.claude/agents/les-<id>.md`, with the tier mapped to a model. Dispatch to
 `les-<id>`. On a host without subagents, the Lead runs the departments in
 sequence and keeps the brief and report boundary between them, loading only the

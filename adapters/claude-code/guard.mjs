@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // LES guard: a Claude Code PreToolUse hook. Reads the tool call as JSON on stdin and
-// exits 2 with a reason on stderr to block it. Enable with `les guard on` (`les guard on codex` for Codex).
+// exits 2 with a reason on stderr to block it. Enable with `les connect` or `les guard on` (`les guard on codex` for Codex).
 // `guard.mjs session-start` is the matching SessionStart hook; it prints the bootstrap reminder.
 // Codex sends the same stdin shape and honors exit 2; it runs with `--no-gate`.
 // Gemini CLI runs with `--host gemini` (BeforeTool tool names mapped, SessionStart context as JSON).

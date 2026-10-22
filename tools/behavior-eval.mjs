@@ -98,10 +98,10 @@ function validate(item, result) {
 }
 
 async function stageWorkspace(item, workspace) {
-  for (const step of [["init"], ["on", host.adapter]]) {
-    const staged = spawnSync(process.execPath, [cli, ...step], { cwd: workspace, encoding: "utf8", env: childEnv });
-    if (staged.status !== 0) throw new Error(staged.stderr || staged.stdout || `LES ${step[0]} failed`);
-  }
+  const staged = spawnSync(process.execPath, [cli, "init"], { cwd: workspace, encoding: "utf8", env: childEnv });
+  if (staged.status !== 0) throw new Error(staged.stderr || staged.stdout || "LES init failed");
+  // Only the pointer: `les connect` would also install guard hooks, which change what the eval measures.
+  await writeFile(join(workspace, host.pointer), "# LES\n\n@./LES-AGENT.md\n");
   const entrypoint = join(workspace, "LES-AGENT.md");
   await writeFile(entrypoint, (await readFile(entrypoint, "utf8")).replaceAll("~/.les-agents", resolve(store)));
   if (hostSmoke) {

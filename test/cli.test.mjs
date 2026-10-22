@@ -113,13 +113,14 @@ test("user install, repo init, routing, and cached update notice work without re
 
     assert.equal(run(["init"], project, env).status, 0);
     assert.match(await readFile(join(project, "LES-AGENT.md"), "utf8"), /~\/\.les-agents/);
-    assert.equal(run(["active", "codex"], project, env).status, 0);
+    assert.match(run(["doctor"], project, env).stdout, /\[FALLBACK\] guard: off.*les connect/);
+    const connected = run(["connect"], project, env);
+    assert.equal(connected.status, 0, connected.stderr);
     assert.equal(await readFile(join(project, "AGENTS.md"), "utf8"), "# LES\n\n@./LES-AGENT.md\n");
     assert.equal(await access(join(project, "outside-codex", "AGENTS.md")).then(() => true).catch(() => false), false);
-    assert.equal(run(["off"], project, env).status, 0);
-    assert.equal(await access(join(project, "AGENTS.md")).then(() => true).catch(() => false), false);
-    assert.equal(run(["on"], project, env).status, 0);
+    assert.equal(run(["connect"], project, env).status, 0);
     assert.equal(run(["init"], project, env).status, 0);
+    assert.match(run(["doctor"], project, env).stdout, /\[READY\] guard/);
     assert.equal(run(["doctor"], project, { ...env, LES_UPDATE_CHECK: "1", LES_LATEST_VERSION: "9.9.9" }).status, 0);
     assert.match(run(["doctor"], project, { ...env, LES_UPDATE_CHECK: "1", LES_LATEST_VERSION: "9.9.9" }).stdout, /UPDATE_AVAILABLE.*les/);
     const healthy = run(["doctor"], project, env).stdout;
@@ -146,7 +147,7 @@ test("user install, repo init, routing, and cached update notice work without re
       env: { ...env, LES_UPDATE_CHECK: "1" }
     });
     assert.match(staleCacheCheck.stdout, /UPDATE_AVAILABLE.*1\.0\.0 -> 1\.0\.1/);
-    assert.ok((await filesBelow(project)).every((path) => path.endsWith(".md")));
+    assert.ok((await filesBelow(project)).every((path) => path.endsWith(".md") || path.endsWith(".json")));
   } finally {
     await rm(project, { recursive: true, force: true });
     await rm(home, { recursive: true, force: true });
@@ -180,7 +181,7 @@ test("user install repairs a stale LES PATH snippet", async () => {
   }
 });
 
-test("active preserves a project-owned provider entrypoint", async () => {
+test("connect skips a project-owned provider entrypoint and connects the rest", async () => {
   const project = await mkdtemp(join(tmpdir(), "les-cli-adapter-"));
   const home = await mkdtemp(join(tmpdir(), "les-cli-adapter-home-"));
   try {
@@ -188,128 +189,121 @@ test("active preserves a project-owned provider entrypoint", async () => {
     assert.equal(run([], project, env).status, 0);
     assert.equal(run(["init"], project, env).status, 0);
     await writeFile(join(project, "GEMINI.md"), "project owned\n");
-    const result = run(["active", "gemini-cli"], project, env);
-    assert.equal(result.status, 2);
-    assert.match(result.stderr, /Collision/);
+    const result = run(["connect"], project, env);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stderr, /Skipped gemini-cli/);
     assert.equal(await readFile(join(project, "GEMINI.md"), "utf8"), "project owned\n");
+    assert.equal(await readFile(join(project, "AGENTS.md"), "utf8"), "# LES\n\n@./LES-AGENT.md\n");
   } finally {
     await rm(project, { recursive: true, force: true });
     await rm(home, { recursive: true, force: true });
   }
 });
 
-test("connect discovers available CLIs and selects connected/default-on providers", async () => {
+test("connect links every provider and turns the guard on without being asked", async () => {
   const project = await mkdtemp(join(tmpdir(), "les-cli-connect-"));
   const home = await mkdtemp(join(tmpdir(), "les-cli-connect-home-"));
-  const cliBin = await mkdtemp(join(tmpdir(), "les-cli-connect-bin-"));
   try {
-    for (const provider of ["codex", "gemini"]) {
-      const command = join(cliBin, provider);
-      // Windows npm installs CLIs as .cmd shims.
-      if (process.platform === "win32") await writeFile(command + ".cmd", "@exit /b 0\r\n");
-      else {
-        await writeFile(command, "#!/bin/sh\nexit 0\n");
-        await chmod(command, 0o755);
-      }
-    }
-    const env = { LES_HOME: home, PATH: cliBin, LES_DISABLE_PATH_SETUP: "1" };
+    const env = { LES_HOME: home, LES_DISABLE_PATH_SETUP: "1" };
     assert.equal(run([], project, env).status, 0);
+    execFileSync("git", ["init", "-q"], { cwd: project });
     const stateOf = async () => JSON.parse((await readFile(join(project, "LES-AGENT.md"), "utf8"))
       .match(/<!-- LES-MANAGED\n([\s\S]*?)\n-->/u)[1]);
     const pointer = "# LES\n\n@./LES-AGENT.md\n";
 
-    assert.equal(run(["connect", "--dry-run", "codex"], project, env).status, 0);
+    assert.equal(run(["connect", "--dry-run"], project, env).status, 0);
     assert.equal(await access(join(project, "LES-AGENT.md")).then(() => true).catch(() => false), false);
+    assert.equal(await access(join(project, ".claude")).then(() => true).catch(() => false), false);
     assert.notEqual(run(["connect", "nope"], project, env).status, 0);
 
-    const result = run(["connect"], project, env, "\x1b[B \r");
+    const result = run(["connect"], project, env);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Select all/);
-    assert.deepEqual((await stateOf()).activeProviders, ["gemini-cli"]);
-    assert.equal(await readFile(join(project, "GEMINI.md"), "utf8"), pointer);
-    assert.equal(await access(join(project, "AGENTS.md")).then(() => true).catch(() => false), false);
+    assert.deepEqual((await stateOf()).activeProviders, ["antigravity", "claude-code", "codex", "gemini-cli"]);
+    for (const file of ["AGENTS.md", "CLAUDE.md", "GEMINI.md"]) assert.equal(await readFile(join(project, file), "utf8"), pointer);
+    assert.match(await readFile(join(project, ".agents", "agents", "les", "agent.md"), "utf8"), /@\.\.\/\.\.\/\.\.\/LES-AGENT\.md/);
+    assert.equal(run(["connect"], project, env).status, 0);
 
-    assert.equal(run(["connect", "--all"], project, env).status, 0);
-    assert.deepEqual((await stateOf()).configuredProviders, ["codex", "gemini-cli"]);
-    assert.equal(await readFile(join(project, "AGENTS.md"), "utf8"), pointer);
-    assert.equal(run(["off", "gemini-cli"], project, env).status, 0);
-    assert.equal(await access(join(project, "GEMINI.md")).then(() => true).catch(() => false), false);
-    assert.equal(run(["on", "gemini-cli"], project, env).status, 0);
-    assert.equal(await readFile(join(project, "GEMINI.md"), "utf8"), pointer);
+    const script = join(home, "adapters", "claude-code", "guard.mjs");
+    const claude = JSON.parse(await readFile(join(project, ".claude", "settings.local.json"), "utf8"));
+    assert.equal(claude.hooks.PreToolUse.length, 1);
+    assert.equal(claude.hooks.PreToolUse[0].hooks[0].command, `node "${script}"`);
+    assert.equal(claude.hooks.PreToolUse[0].hooks[0].onFailure, "block");
+    assert.equal(claude.hooks.Stop.length, 1);
+    assert.equal(claude.hooks.Stop[0].hooks[0].command, `node "${script}" stop`);
+    assert.equal(claude.hooks.SessionStart.length, 1);
+    assert.equal(claude.hooks.SessionStart[0].hooks[0].command, `node "${script}" session-start`);
+    const codex = JSON.parse(await readFile(join(project, ".codex", "hooks.json"), "utf8"));
+    assert.deepEqual(codex.hooks.PreToolUse, [{ matcher: "Bash", hooks: [{ type: "command", command: `node "${script}" --no-gate` }] }]);
+    assert.equal(codex.hooks.SessionStart[0].hooks[0].command, `node "${script}" --no-gate session-start`);
+    const gemini = JSON.parse(await readFile(join(project, ".gemini", "settings.json"), "utf8"));
+    assert.deepEqual(gemini.hooks.BeforeTool, [{ matcher: "run_shell_command|read_file", hooks: [{ type: "command", command: `node "${script}" --host gemini` }] }]);
+    assert.equal(gemini.hooks.SessionStart[0].hooks[0].command, `node "${script}" --host gemini session-start`);
+
+    const exclude = (await readFile(join(project, ".git", "info", "exclude"), "utf8")).split("\n");
+    for (const entry of [".claude/settings.local.json", ".codex/hooks.json", ".gemini/settings.json"]) assert.equal(exclude.filter((line) => line === entry).length, 1, entry);
+    const status = execFileSync("git", ["status", "--short"], { cwd: project, encoding: "utf8" });
+    for (const hidden of [".claude", ".codex", ".gemini"]) assert.equal(status.includes(hidden), false, hidden);
+    assert.match(run(["doctor"], project, env).stdout, /\[READY\] guard/);
   } finally {
     await rm(project, { recursive: true, force: true });
     await rm(home, { recursive: true, force: true });
-    await rm(cliBin, { recursive: true, force: true });
   }
 });
 
-test("legacy add, diff, and update preserve a Markdown-only repo installation", async () => {
-  const project = await mkdtemp(join(tmpdir(), "les-cli-legacy-"));
+test("connect merges into existing settings without touching other hooks or settings", async () => {
+  const project = await mkdtemp(join(tmpdir(), "les-cli-merge-"));
+  const home = await mkdtemp(join(tmpdir(), "les-cli-merge-home-"));
   try {
-    assert.equal(run(["add", "--scope", "repo"], project).status, 0);
-    const installRoot = join(project, ".les-agents");
-    const manifest = await readManifest(join(installRoot, "les-manifest.md"));
-    assert.equal(manifest.scope, "repo");
-    assert.match(await readFile(join(project, ".gitignore"), "utf8"), /^\.les-agents\/?$/mu);
-    assert.ok((await filesBelow(installRoot)).every((path) => path.endsWith(".md")));
-    assert.equal(run(["add", "--scope", "repo"], project).status, 2);
-    await writeFile(join(installRoot, "policies", "principles.md"), "changed\n");
-    assert.equal(run(["diff", "--scope", "repo"], project).status, 1);
-    assert.equal(run(["update", "--scope", "repo"], project).status, 0);
-    assert.match(await readFile(join(installRoot, "policies", "principles.md"), "utf8"), /# Principles/);
+    const env = { LES_HOME: home, LES_DISABLE_PATH_SETUP: "1" };
+    assert.equal(run([], project, env).status, 0);
+    const settings = join(project, ".claude", "settings.local.json");
+    await mkdir(join(project, ".claude"), { recursive: true });
+    const other = { matcher: "Edit", hooks: [{ type: "command", command: "true" }] };
+    await writeFile(settings, JSON.stringify({ permissions: { allow: ["Bash(ls)"] }, hooks: { PreToolUse: [other] } }));
+    await mkdir(join(project, ".gemini"), { recursive: true });
+    await writeFile(join(project, ".gemini", "settings.json"), JSON.stringify({ theme: "dark" }));
+
+    assert.equal(run(["connect"], project, env).status, 0);
+    assert.equal(run(["connect"], project, env).status, 0);
+    const merged = JSON.parse(await readFile(settings, "utf8"));
+    assert.equal(merged.hooks.PreToolUse.length, 2);
+    assert.deepEqual(merged.hooks.PreToolUse[0], other);
+    assert.deepEqual(merged.permissions, { allow: ["Bash(ls)"] });
+    assert.equal(JSON.parse(await readFile(join(project, ".gemini", "settings.json"), "utf8")).theme, "dark");
+
+    await writeFile(settings, "{ nope");
+    assert.notEqual(run(["connect"], project, env).status, 0);
+    assert.equal(await readFile(settings, "utf8"), "{ nope");
   } finally {
     await rm(project, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
   }
 });
 
-test("legacy rollback restores the installation saved by update", async () => {
-  const project = await mkdtemp(join(tmpdir(), "les-cli-rollback-"));
+test("update runs the latest published package through npx", async () => {
+  if (process.platform === "win32") return;
+  const bin = await mkdtemp(join(tmpdir(), "les-cli-npx-"));
   try {
-    assert.equal(run(["add", "--scope", "repo"], project).status, 0);
-    const principles = join(project, ".les-agents", "policies", "principles.md");
-    await writeFile(principles, "before update\n");
-    const updated = run(["update", "--scope", "repo"], project);
-    assert.equal(updated.status, 0);
-    assert.match(await readFile(principles, "utf8"), /# Principles/);
-    assert.equal(run(["rollback", "--scope", "repo"], project).status, 2);
-    const backup = updated.stdout.match(/Backup: (.+)/u)[1].trim();
-    assert.equal(run(["rollback", "--scope", "repo", "--backup", backup], project).status, 0);
-    assert.equal(await readFile(principles, "utf8"), "before update\n");
+    await writeFile(join(bin, "npx"), '#!/bin/sh\necho "$@" > "$NPX_LOG"\n[ -z "$NPX_FAIL" ]\n');
+    await chmod(join(bin, "npx"), 0o755);
+    const env = { PATH: bin + ":" + process.env.PATH, NPX_LOG: join(bin, "log") };
+    assert.equal(run(["update", "--dry-run"], root, env).status, 0);
+    assert.equal(await access(env.NPX_LOG).then(() => true).catch(() => false), false);
+    assert.equal(run(["update"], root, env).status, 0);
+    assert.equal((await readFile(env.NPX_LOG, "utf8")).trim(), "-y " + packageMetadata.name + "@latest");
+    const failed = run(["update"], root, { ...env, NPX_FAIL: "1" });
+    assert.equal(failed.status, 2);
+    assert.match(failed.stderr, /npx .* failed/);
   } finally {
-    await rm(project, { recursive: true, force: true });
+    await rm(bin, { recursive: true, force: true });
   }
 });
 
-test("legacy update migrates a full repo payload to Markdown-only", async () => {
-  const project = await mkdtemp(join(tmpdir(), "les-cli-migration-"));
-  const installRoot = join(project, ".les-agents");
-  try {
-    await mkdir(join(installRoot, "policies"), { recursive: true });
-    await mkdir(join(installRoot, "bin"), { recursive: true });
-    await mkdir(join(installRoot, "tools"), { recursive: true });
-    await writeFile(join(installRoot, "policies", "principles.md"), "legacy\n");
-    await writeFile(join(installRoot, "bin", "les.mjs"), "legacy source\n");
-    await writeFile(join(installRoot, "tools", "old.mjs"), "legacy source\n");
-    await writeFile(join(installRoot, "les-manifest.json"), JSON.stringify({
-      manifestVersion: 1,
-      packageName: "@hakienit/les",
-      packageVersion: "0.1.0",
-      scope: "repo",
-      managed: [
-        { path: "policies/principles.md", sha256: "legacy" },
-        { path: "bin/les.mjs", sha256: "legacy" },
-        { path: "tools/old.mjs", sha256: "legacy" }
-      ],
-      adapters: [],
-      configuredAdapters: []
-    }) + "\n");
-    assert.equal(run(["update", "--scope", "repo"], project).status, 0);
-    assert.ok((await filesBelow(installRoot)).every((path) => path.endsWith(".md")));
-    assert.equal(await access(join(installRoot, "bin")).then(() => true).catch(() => false), false);
-    assert.equal(await access(join(installRoot, "tools")).then(() => true).catch(() => false), false);
-  } finally {
-    await rm(project, { recursive: true, force: true });
-  }
+test("version and status are available as commands", () => {
+  assert.equal(run(["version"], root).stdout.trim(), packageMetadata.version);
+  assert.equal(run(["--version"], root).stdout.trim(), packageMetadata.version);
+  assert.match(run(["status"], root, { LES_HOME: join(tmpdir(), "les-cli-no-such-home") }).stdout, /\[PENDING_USER_ACTION\] installation/);
+  for (const removed of ["on", "off", "add", "diff", "rollback"]) assert.notEqual(run([removed], root).status, 0, removed);
 });
 
 test("user install never writes provider home directories", async () => {
@@ -320,7 +314,7 @@ test("user install never writes provider home directories", async () => {
     const env = { LES_HOME: home, CODEX_HOME: join(providerHome, ".codex"), LES_DISABLE_PATH_SETUP: "1" };
     assert.equal(run([], project, env).status, 0);
     assert.equal(run(["init"], project, env).status, 0);
-    assert.equal(run(["active", "codex"], project, env).status, 0);
+    assert.equal(run(["connect"], project, env).status, 0);
     assert.equal(await access(join(providerHome, ".codex", "AGENTS.md")).then(() => true).catch(() => false), false);
   } finally {
     await rm(project, { recursive: true, force: true });
@@ -533,6 +527,42 @@ test("guard --no-gate (Codex) blocks risky Bash like Claude Code but never gates
   assert.ok(out.includes("status footer") && !out.includes("are blocked until"));
 });
 
+test("connect writes one subagent per department without touching user agents", async () => {
+  const project = await mkdtemp(join(tmpdir(), "les-cli-team-"));
+  const home = await mkdtemp(join(tmpdir(), "les-cli-team-home-"));
+  try {
+    const env = { LES_HOME: home, LES_DISABLE_PATH_SETUP: "1" };
+    assert.equal(run([], project, env).status, 0);
+    execFileSync("git", ["init", "-q"], { cwd: project });
+    const agents = join(project, ".claude", "agents");
+    await mkdir(agents, { recursive: true });
+    await writeFile(join(agents, "les-review.md"), "mine");
+    await writeFile(join(agents, "other.md"), "other");
+    const departments = JSON.parse(await readFile(join(root, "inventory.yaml"), "utf8")).departments.filter((department) => department.id !== "lead");
+
+    assert.equal(run(["connect", "--dry-run"], project, env).status, 0);
+    assert.deepEqual((await readdir(agents)).sort(), ["les-review.md", "other.md"]);
+    assert.equal(run(["connect"], project, env).status, 0);
+    assert.equal(run(["connect"], project, env).status, 0);
+    assert.equal(await readFile(join(agents, "les-review.md"), "utf8"), "mine");
+    assert.equal((await readdir(agents)).length, departments.length + 1);
+    const engineering = await readFile(join(agents, "les-engineering.md"), "utf8");
+    assert.match(engineering, /^---\nname: les-engineering\n/u);
+    assert.match(engineering, /\nmodel: sonnet\n/u);
+    assert.doesNotMatch(engineering, /\ntools:/u);
+    assert.ok(engineering.includes(join(home, "skills", "les-feature-delivery", "SKILL.md")));
+    const scout = await readFile(join(agents, "les-scout.md"), "utf8");
+    assert.match(scout, /\nmodel: haiku\ntools: Read, Grep, Glob, Bash\n---\n/u);
+    assert.match(scout, /read-only/u);
+    assert.match(await readFile(join(agents, "les-security.md"), "utf8"), /\nmodel: opus\n/u);
+    const exclude = (await readFile(join(project, ".git", "info", "exclude"), "utf8")).split("\n");
+    assert.equal(exclude.filter((line) => line === ".claude/agents/les-*.md").length, 1);
+  } finally {
+    await rm(project, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
 test("team on and off manage one subagent per department without touching user agents", async () => {
   const project = await mkdtemp(join(tmpdir(), "les-cli-team-"));
   const home = await mkdtemp(join(tmpdir(), "les-cli-team-home-"));
@@ -607,7 +637,7 @@ test("guard on and off merge into settings.local.json without touching other hoo
 
     assert.equal(run(["guard", "off"], project, env).status, 0);
     const offDoctor = run(["doctor"], project, env);
-    assert.match(offDoctor.stdout, /\[FALLBACK\] guard: off.*les guard on/);
+    assert.match(offDoctor.stdout, /\[FALLBACK\] guard: off.*les connect/);
     assert.equal(offDoctor.status, 0, "guard off is a warning, not a failure");
     const off = JSON.parse(await readFile(settings, "utf8"));
     assert.deepEqual(off.hooks.PreToolUse, [other]);
