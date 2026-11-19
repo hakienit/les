@@ -32,12 +32,14 @@ Usage:
   les init             create LES-AGENT.md only
   les connect          set up this repo: LES-AGENT.md, every provider, guard and team on
   les guard on|off [codex|gemini]  block secret reads, deletes outside the repo, and force pushes (default: Claude Code)
-  les team on|off      add or remove one Claude Code subagent per LES department
+  les team on|off [--shared]  add or remove the Claude Code department subagents and the les-squad workflow
+                       (--shared: portable ~/.les-agents paths, kept visible to git so the team can commit them)
+  les project init     copy the project overlay template into .les/ without overwriting
   les lint FILE...     flag placeholders and unverifiable acceptance criteria
   les doctor           show install, routing, and update status (alias: les status)
   les version          print the LES version
 
-Options: --dry-run, --version
+Options: --dry-run, --version, --shared (team on, connect)
 
 Install from npm:
   npx -y @hakienit/les@latest
@@ -48,11 +50,12 @@ after the first install.`);
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
-  const options = { dryRun: false };
+  const options = { dryRun: false, shared: false };
   const args = [];
   for (const value of rest) {
-    if (["guard", "team", "lint"].includes(command) && !value.startsWith("-")) args.push(value);
+    if (["guard", "team", "lint", "project"].includes(command) && !value.startsWith("-")) args.push(value);
     else if (value === "--dry-run") options.dryRun = true;
+    else if (value === "--shared" && ["team", "connect"].includes(command)) options.shared = true;
     else if (value === "--version") {
       console.log(packageMetadata.version);
       process.exit(0);
@@ -63,14 +66,16 @@ function parseArgs(argv) {
       throw new Error("Unknown option: " + value);
     }
   }
-  if (!["install", "update", "init", "connect", "guard", "team", "lint", "doctor", "status", "version"].includes(command)) {
+  if (!["install", "update", "init", "connect", "guard", "team", "project", "lint", "doctor", "status", "version"].includes(command)) {
     usage();
-    throw new Error("Choose update, init, connect, guard, team, lint, doctor, or version.");
+    throw new Error("Choose update, init, connect, guard, team, project, lint, doctor, or version.");
   }
   if (command === "lint" && !args.length) throw new Error("lint requires at least one Markdown file.");
   if (command === "guard" && !(["on", "off"].includes(args[0]) && (args.length === 1 || args.length === 2 && ["codex", "gemini"].includes(args[1])))) throw new Error("guard requires on or off, optionally followed by codex or gemini.");
   if (command === "team" && !(args.length === 1 && ["on", "off"].includes(args[0]))) throw new Error("team requires on or off.");
-  if (!["guard", "team", "lint"].includes(command) && args.length) throw new Error("Unknown option: " + args[0]);
+  if (command === "team" && options.shared && args[0] !== "on") throw new Error("--shared applies to team on only.");
+  if (command === "project" && !(args.length === 1 && args[0] === "init")) throw new Error("project requires init.");
+  if (!["guard", "team", "lint", "project"].includes(command) && args.length) throw new Error("Unknown option: " + args[0]);
   return { command, options, args };
 }
 
@@ -350,7 +355,9 @@ function agentDocument(state) {
     "Use that installation as the only LES source for this repository.\n\n" +
     "Read the adapter matching the current AI CLI:\n" +
     providers.map((provider) => "- " + provider).join("\n") + "\n\n" +
-    "Then read `~/.les-agents/skills/les-bootstrap/SKILL.md` before starting work.\n\n" +
+    "Then read `~/.les-agents/skills/les-bootstrap/SKILL.md` before starting work.\n" +
+    "If `.les/ENTRYPOINT.md` exists, read it next: it is this project's entrypoint\n" +
+    "and may narrow LES, never weaken it.\n\n" +
     "<!-- LES-MANAGED\n" + JSON.stringify(state, null, 2) + "\n-->\n";
 }
 
@@ -401,6 +408,7 @@ const guardHostFor = { codex: "codex", "claude-code": "claude", "gemini-cli": "g
 
 async function connect(options) {
   const root = await requireUserStore();
+  teamShared(root, options);
   const state = await exists(localAgentPath()) ? await readAgentState() : initialState();
   const plans = [];
   for (const { name: provider } of supportedProviders) {
@@ -431,6 +439,7 @@ async function connect(options) {
   }
   for (const provider of connected) if (guardHostFor[provider]) await guard(root, true, options, guardHostFor[provider]);
   if (connected.includes("claude-code")) await team(root, true, options);
+  else if (options.shared) console.error("[WARN] --shared ignored: Claude Code was not connected.");
   if (!options.dryRun) console.log("Connected " + connected.join(", ") + ".");
 }
 
@@ -555,11 +564,19 @@ const guardHosts = {
   gemini: { label: "Gemini CLI", file: ".gemini/settings.json", before: "BeforeTool", matcher: "run_shell_command|read_file", start: "*", flags: " --host gemini" }
 };
 
+// The exclude file and its patterns are relative to the repository root, which may be above the working directory.
+function excludeTarget(entry) {
+  const found = spawnSync("git", ["rev-parse", "--git-path", "info/exclude", "--show-prefix"], { encoding: "utf8" });
+  if (found.status !== 0) return undefined;
+  const [path, prefix = ""] = found.stdout.split(/\r?\n/u);
+  return { path: resolve(path), entry: prefix + entry };
+}
+
 // Keep personal settings out of `git status` without touching tracked files; skipped outside a git repo.
-async function excludeLocally(entry) {
-  const found = spawnSync("git", ["rev-parse", "--git-path", "info/exclude"], { encoding: "utf8" });
-  if (found.status !== 0) return;
-  const path = resolve(found.stdout.trim());
+async function excludeLocally(local) {
+  const target = excludeTarget(local);
+  if (!target) return;
+  const { path, entry } = target;
   const current = await exists(path) ? await readFile(path, "utf8") : "";
   if (current.split(/\r?\n/u).includes(entry)) return;
   await mkdir(dirname(path), { recursive: true });
@@ -599,25 +616,55 @@ async function guard(root, enabled, options, host = "claude") {
   if (enabled && note) console.log(note);
 }
 
+// Drop an entry that excludeLocally added, so files the team commits show up in `git status`.
+async function includeLocally(local) {
+  const target = excludeTarget(local);
+  if (!target) return;
+  const { path, entry } = target;
+  if (!await exists(path)) return;
+  const lines = (await readFile(path, "utf8")).split(/\r?\n/u);
+  if (lines.includes(entry)) await writeFile(path, lines.filter((line) => line !== entry).join("\n"));
+}
+
 const teamAgents = ".claude/agents";
+const teamWorkflows = ".claude/workflows";
 const teamMarker = "<!-- les-team: generated by `les connect` or `les team on`; `les team off` removes it. -->";
 const teamModels = { fast: "haiku", standard: "sonnet", deep: "opus" };
+const teamEfforts = { deep: "high" };
+const teamExcludes = [teamAgents + "/les-*.md", teamWorkflows + "/les-*.js"];
+
+// The default store is written as `~/.les-agents/...` so agent files work on every teammate's machine.
+function isDefaultStore(root) {
+  return resolve(root) === resolve(join(homedir(), ".les-agents"));
+}
+
+function storePath(root, ...parts) {
+  return isDefaultStore(root) ? ["~/.les-agents", ...parts].join("/") : join(root, ...parts);
+}
+
+// Shared (or already tracked) team files must hold portable paths; check before any repository write.
+function teamShared(root, options) {
+  const shared = options.shared || teamTracked();
+  if (shared && !isDefaultStore(root)) throw new Error("Team files are shared (--shared or tracked by git) and need the default store ~/.les-agents so paths resolve on every machine; unset LES_HOME.");
+  return shared;
+}
 
 function teamAgent(root, department) {
   const readOnly = department.access === "read";
-  const skills = department.skills.map((name) => "   - `" + join(root, "skills", name, "SKILL.md") + "`").join("\n");
+  const effort = teamEfforts[department.tier];
+  const skills = department.skills.map((name) => "   - `" + storePath(root, "skills", name, "SKILL.md") + "`").join("\n");
   return `---
 name: les-${department.id}
 description: LES ${department.name} department (${department.tier} tier). ${department.description} Use only when the LES Lead dispatches a brief to ${department.name}.
 model: ${teamModels[department.tier]}
-${readOnly ? "tools: Read, Grep, Glob, Bash\n" : ""}---
+${effort ? "effort: " + effort + "\n" : ""}${readOnly ? "tools: Read, Grep, Glob, Bash\n" : ""}---
 ${teamMarker}
 
 # LES ${department.name}
 
 You are the ${department.name} department of a LES team. Work only from the Lead's brief.
 
-1. Read \`${join(root, "policies", "team.md")}\`.
+1. Read \`${storePath(root, "policies", "team.md")}\`. \`~\` is the user's home directory. If the file is missing, LES is not installed on this machine: report \`BLOCKED\` with the next safe action \`npx -y @hakienit/les@latest\`.
 2. Read the one skill the brief names from your catalog, plus its non-bootstrap \`loads\`:
 ${skills}
 3. Stay inside the brief's owned paths and granted authority.${readOnly ? " You are read-only: never modify files." : ""}
@@ -625,37 +672,74 @@ ${skills}
 `;
 }
 
+function teamTracked() {
+  const found = spawnSync("git", ["ls-files", "--", ...teamExcludes], { encoding: "utf8" });
+  return found.status === 0 && found.stdout.trim() !== "";
+}
+
 async function team(root, enabled, options) {
   const inventory = JSON.parse(await readFile(join(root, "inventory.yaml"), "utf8"));
   const departments = (inventory.departments || []).filter((department) => department.id !== "lead");
   if (enabled && !departments.length) throw new Error("The installed LES has no departments; run les update.");
+  const shared = enabled && teamShared(root, options);
   const directory = join(process.cwd(), teamAgents);
+  const workflowSource = join(root, "adapters", "claude-code", "workflows");
+  const files = departments.map((department) => ({ path: join(directory, "les-" + department.id + ".md"), relativePath: teamAgents + "/les-" + department.id + ".md", content: () => teamAgent(root, department), label: department.tier + " tier, " + department.access + " access" }));
+  for (const name of await exists(workflowSource) ? (await readdir(workflowSource)).filter((name) => /^les-.*\.js$/u.test(name)) : []) {
+    files.push({ path: join(process.cwd(), teamWorkflows, name), relativePath: teamWorkflows + "/" + name, content: () => readFile(join(workflowSource, name), "utf8"), label: "workflow" });
+  }
   const changes = [];
   const actions = [];
-  for (const department of departments) {
-    const path = join(directory, "les-" + department.id + ".md");
-    const relativePath = teamAgents + "/les-" + department.id + ".md";
+  for (const { path, relativePath, content, label } of files) {
     const present = await exists(path);
-    // Never overwrite or delete an agent file the user wrote under the same name.
+    // Never overwrite or delete a file the user wrote under the same name.
     if (present && !(await readFile(path, "utf8")).includes(teamMarker)) {
       changes.push("keep " + relativePath + " (not LES-managed)");
       continue;
     }
     if (enabled) {
-      changes.push("write " + relativePath + " (" + department.tier + " tier, " + department.access + " access)");
-      actions.push(() => writeFile(path, teamAgent(root, department)));
+      changes.push("write " + relativePath + " (" + label + ")");
+      actions.push(async () => {
+        await mkdir(dirname(path), { recursive: true });
+        await writeFile(path, await content());
+      });
     } else if (present) {
       changes.push("remove " + relativePath);
       actions.push(() => rm(path));
     }
   }
-  printPlan("team " + (enabled ? "on" : "off"), directory, changes.length ? changes : ["nothing to change"]);
+  if (enabled) changes.push(shared ? "keep the team files visible to git" : "hide the team files from git in .git/info/exclude");
+  printPlan("team " + (enabled ? "on" : "off"), directory, changes);
   if (options.dryRun) return;
-  if (enabled) await mkdir(directory, { recursive: true });
   for (const action of actions) await action();
-  // Agent files hold absolute paths into this machine's user store, so keep them out of git.
-  if (enabled) await excludeLocally(teamAgents + "/les-*.md");
-  console.log("Team " + (enabled ? "enabled" : "disabled") + " for Claude Code in " + teamAgents + ".");
+  // Local agent files may hold absolute paths into this machine's store, so hide them unless the team shares them.
+  if (enabled) for (const entry of teamExcludes) await (shared ? includeLocally(entry) : excludeLocally(entry));
+  console.log("Team " + (enabled ? "enabled" : "disabled") + " for Claude Code in " + teamAgents + " and " + teamWorkflows + (shared && enabled ? " (shared: commit them)" : "") + ".");
+}
+
+const overlayDirectory = ".les";
+
+async function projectInit(root, options) {
+  const source = join(root, "templates", "project");
+  const target = join(process.cwd(), overlayDirectory);
+  const changes = [];
+  const copies = [];
+  // The template README explains the overlay to LES maintainers; the copied ENTRYPOINT.md explains it to the project.
+  for (const path of (await filesBelow(source)).filter((path) => path !== "README.md")) {
+    const destination = join(target, path);
+    if (await exists(destination)) changes.push("keep " + overlayDirectory + "/" + path);
+    else {
+      changes.push("write " + overlayDirectory + "/" + path);
+      copies.push([join(source, path), destination]);
+    }
+  }
+  printPlan("project init", target, changes);
+  if (options.dryRun) return;
+  for (const [from, to] of copies) {
+    await mkdir(dirname(to), { recursive: true });
+    await cp(from, to);
+  }
+  console.log("Project overlay ready in " + overlayDirectory + "/. Replace the placeholders, then commit it.");
 }
 
 async function doctor() {
@@ -701,6 +785,9 @@ async function doctor() {
     } catch {
       statuses.push(doctorLine("BLOCKED", "repository", "LES-AGENT.md is not LES-managed"));
     }
+    statuses.push(await exists(join(process.cwd(), overlayDirectory, "ENTRYPOINT.md"))
+      ? doctorLine("READY", "project-overlay", overlayDirectory + "/ENTRYPOINT.md")
+      : doctorLine("FALLBACK", "project-overlay", "none; optional: les project init"));
   } else {
     statuses.push(doctorLine("PENDING_USER_ACTION", "repository", "run les connect"));
   }
@@ -770,6 +857,8 @@ try {
     await guard(await requireUserStore(), args[0] === "on", options, args[1] || "claude");
   } else if (command === "team") {
     await team(await requireUserStore(), args[0] === "on", options);
+  } else if (command === "project") {
+    await projectInit(await requireUserStore(), options);
   } else if (command === "lint") {
     process.exitCode = await lint(args);
   } else {

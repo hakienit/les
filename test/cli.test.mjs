@@ -147,7 +147,7 @@ test("user install, repo init, routing, and cached update notice work without re
       env: { ...env, LES_UPDATE_CHECK: "1" }
     });
     assert.match(staleCacheCheck.stdout, /UPDATE_AVAILABLE.*1\.0\.0 -> 1\.0\.1/);
-    assert.ok((await filesBelow(project)).every((path) => path.endsWith(".md") || path.endsWith(".json")));
+    assert.ok((await filesBelow(project)).every((path) => path.endsWith(".md") || path.endsWith(".json") || /^\.claude[\\/]workflows[\\/]les-[^\\/]+\.js$/u.test(path)));
   } finally {
     await rm(project, { recursive: true, force: true });
     await rm(home, { recursive: true, force: true });
@@ -593,10 +593,182 @@ test("team on and off manage one subagent per department without touching user a
     assert.match(await readFile(join(agents, "les-security.md"), "utf8"), /\nmodel: opus\n/u);
     const exclude = (await readFile(join(project, ".git", "info", "exclude"), "utf8")).split("\n");
     assert.equal(exclude.filter((line) => line === ".claude/agents/les-*.md").length, 1);
+    assert.equal(exclude.filter((line) => line === ".claude/workflows/les-*.js").length, 1);
+    const challenge = await readFile(join(agents, "les-challenge.md"), "utf8");
+    assert.match(challenge, /\nmodel: opus\neffort: high\ntools: Read, Grep, Glob, Bash\n---\n/u);
+    assert.match(await readFile(join(agents, "les-security.md"), "utf8"), /\neffort: high\n/u);
+    assert.doesNotMatch(engineering, /\neffort:/u);
+    const workflows = join(project, ".claude", "workflows");
+    await writeFile(join(workflows, "mine.js"), "mine");
+    const squad = await readFile(join(workflows, "les-squad.js"), "utf8");
+    assert.match(squad, /^export const meta = \{/u);
+    // The Workflow runtime runs the body as an async function with these globals.
+    const AsyncFunction = (async () => {}).constructor;
+    assert.doesNotThrow(() => new AsyncFunction("agent", "parallel", "phase", "log", "args", squad.replace(/^export /u, "")));
+    for (const agentType of ["les-architecture", "les-qa", "les-review", "les-challenge"]) assert.ok(squad.includes(agentType), agentType);
 
     assert.equal(run(["team", "off"], project, env).status, 0);
     assert.deepEqual((await readdir(agents)).sort(), ["les-review.md", "other.md"]);
+    assert.deepEqual(await readdir(workflows), ["mine.js"]);
     assert.notEqual(run(["team"], project, env).status, 0);
+  } finally {
+    await rm(project, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("les-squad workflow loops fixes until challenged findings stop surviving", async () => {
+  const source = (await readFile(join(root, "adapters", "claude-code", "workflows", "les-squad.js"), "utf8")).replace(/^export /u, "");
+  const AsyncFunction = (async () => {}).constructor;
+  const squad = new AsyncFunction("agent", "parallel", "phase", "log", "args", source);
+  const parallel = (thunks) => Promise.all(thunks.map((thunk) => thunk().catch(() => null)));
+  const finding = { severity: "high", location: "src/a.js:3", problem: "off by one", evidence: "[3] returns 5" };
+  const fake = (reviewFindings) => {
+    const calls = [];
+    let reviews = 0;
+    const agent = async (prompt, { agentType }) => {
+      calls.push(agentType);
+      if (agentType === "les-architecture") return { status: "COMPLETE", steps: ["edit src/a.js"], checks: ["npm test"] };
+      if (agentType === "les-engineering") return { status: "COMPLETE", changedPaths: ["src/a.js"], checks: ["npm test: 0"] };
+      if (agentType === "les-review") return { status: "COMPLETE", findings: reviewFindings(reviews++) };
+      if (agentType === "les-qa") return { status: "COMPLETE", findings: [] };
+      if (agentType === "les-challenge") return { verdict: "holds", evidence: "checked" };
+      throw new Error("unexpected agent " + agentType);
+    };
+    return { calls, agent };
+  };
+
+  const twice = fake((round) => (round === 0 ? [finding] : []));
+  const fixed = await squad(twice.agent, parallel, () => {}, () => {}, { task: "double values", acceptance: "[3] returns [6]" });
+  assert.equal(fixed.status, "COMPLETE");
+  assert.equal(fixed.rounds.length, 2);
+  assert.deepEqual(fixed.rounds[0].findings, [finding]);
+  assert.equal(twice.calls.filter((type) => type === "les-engineering").length, 2);
+
+  const stuck = fake(() => [finding]);
+  const failed = await squad(stuck.agent, parallel, () => {}, () => {}, { task: "double values", acceptance: "[3] returns [6]" });
+  assert.equal(failed.status, "FAILED");
+  assert.equal(failed.stage, "fix-loop");
+  assert.equal(stuck.calls.filter((type) => type === "les-engineering").length, 3, "one delivery plus two fix rounds");
+
+  // QA FAILED without a located finding goes back to the writer; a missing claim verdict is a finding, not a pass.
+  let qaRuns = 0;
+  let claimRuns = 0;
+  const flaky = async (prompt, options) => {
+    if (options.agentType === "les-qa") return qaRuns++ === 0 ? { status: "FAILED", findings: [], coverage: "npm test exit 1" } : { status: "COMPLETE", findings: [] };
+    if (options.agentType === "les-challenge" && options.label === "delivery claim") return claimRuns++ === 1 ? null : { verdict: "holds", evidence: "ok" };
+    return fake(() => []).agent(prompt, options);
+  };
+  const recovered = await squad(flaky, parallel, () => {}, () => {}, { task: "double values", acceptance: "[3] returns [6]" });
+  assert.equal(recovered.status, "COMPLETE");
+  assert.equal(recovered.rounds.length, 3);
+  assert.equal(recovered.rounds[0].findings[0].evidence, "npm test exit 1");
+  assert.equal(recovered.rounds[1].findings[0].problem, "delivery claim was not challenged");
+
+  const blocked = await squad(async (prompt, options) => options.agentType === "les-review" ? null : fake(() => []).agent(prompt, options), parallel, () => {}, () => {}, { task: "x", acceptance: "y" });
+  assert.equal(blocked.status, "BLOCKED");
+  assert.deepEqual(blocked.rounds[0].blockedReviewers, ["les-review"]);
+
+  await assert.rejects(squad(twice.agent, parallel, () => {}, () => {}, { task: "x", acceptance: "y", risk: "R3" }), /approval/u);
+  await assert.rejects(squad(twice.agent, parallel, () => {}, () => {}, { task: "x", acceptance: "y", owner: "qa" }), /owner/u);
+});
+
+test("team on --shared writes portable agents that git can track", async () => {
+  const project = await mkdtemp(join(tmpdir(), "les-cli-shared-"));
+  const shellHome = await mkdtemp(join(tmpdir(), "les-cli-shared-home-"));
+  const store = join(shellHome, ".les-agents");
+  try {
+    const env = { HOME: shellHome, USERPROFILE: shellHome, LES_HOME: store, LES_DISABLE_PATH_SETUP: "1" };
+    assert.equal(run([], project, env).status, 0);
+    execFileSync("git", ["init", "-q"], { cwd: project });
+    const excluded = async () => (await readFile(join(project, ".git", "info", "exclude"), "utf8")).split("\n").filter((line) => line.startsWith(".claude/agents/les-") || line.startsWith(".claude/workflows/les-"));
+
+    assert.equal(run(["team", "on"], project, env).status, 0);
+    assert.equal((await excluded()).length, 2);
+    const shared = run(["team", "on", "--shared"], project, env);
+    assert.equal(shared.status, 0, shared.stderr);
+    assert.deepEqual(await excluded(), []);
+    const engineering = await readFile(join(project, ".claude", "agents", "les-engineering.md"), "utf8");
+    assert.ok(engineering.includes("`~/.les-agents/skills/les-feature-delivery/SKILL.md`"));
+    assert.equal(engineering.includes(shellHome), false);
+    const status = execFileSync("git", ["status", "--short", "--untracked-files=all"], { cwd: project, encoding: "utf8" });
+    assert.match(status, /\.claude\/agents\/les-engineering\.md/u);
+    assert.match(status, /\.claude\/workflows\/les-squad\.js/u);
+
+    // Once tracked, a plain rerun (as `les connect` does) keeps them visible to git.
+    execFileSync("git", ["add", ".claude/agents", ".claude/workflows"], { cwd: project });
+    assert.equal(run(["team", "on"], project, env).status, 0);
+    assert.deepEqual(await excluded(), []);
+
+    const elsewhere = { ...env, LES_HOME: join(shellHome, "elsewhere") };
+    assert.equal(run([], project, elsewhere).status, 0);
+    const custom = run(["team", "on", "--shared"], project, elsewhere);
+    assert.notEqual(custom.status, 0);
+    assert.match(custom.stderr, /--shared/u);
+    // Tracked files stay portable: a custom store refuses to rewrite them.
+    const before = await readFile(join(project, ".claude", "agents", "les-review.md"), "utf8");
+    assert.notEqual(run(["team", "on"], project, elsewhere).status, 0);
+    assert.equal(await readFile(join(project, ".claude", "agents", "les-review.md"), "utf8"), before);
+    // connect --shared checks the store before it writes anything.
+    const fresh = await mkdtemp(join(tmpdir(), "les-cli-shared-fresh-"));
+    try {
+      execFileSync("git", ["init", "-q"], { cwd: fresh });
+      assert.notEqual(run(["connect", "--shared"], fresh, elsewhere).status, 0);
+      assert.deepEqual((await readdir(fresh)).filter((name) => name !== ".git"), []);
+    } finally {
+      await rm(fresh, { recursive: true, force: true });
+    }
+    assert.notEqual(run(["guard", "on", "--shared"], project, env).status, 0);
+  } finally {
+    await rm(project, { recursive: true, force: true });
+    await rm(shellHome, { recursive: true, force: true });
+  }
+});
+
+test("team and guard hide files in a subdirectory package from the repository root", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "les-cli-subdir-"));
+  const home = await mkdtemp(join(tmpdir(), "les-cli-subdir-home-"));
+  try {
+    const env = { LES_HOME: home, LES_DISABLE_PATH_SETUP: "1" };
+    assert.equal(run([], repo, env).status, 0);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    const project = join(repo, "packages", "app");
+    await mkdir(project, { recursive: true });
+    assert.equal(run(["team", "on"], project, env).status, 0);
+    assert.equal(run(["guard", "on"], project, env).status, 0);
+    const exclude = (await readFile(join(repo, ".git", "info", "exclude"), "utf8")).split("\n");
+    assert.ok(exclude.includes("packages/app/.claude/agents/les-*.md"));
+    assert.ok(exclude.includes("packages/app/.claude/settings.local.json"));
+    assert.equal(execFileSync("git", ["status", "--short", "--untracked-files=all"], { cwd: repo, encoding: "utf8" }), "");
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("project init copies the overlay into .les without overwriting and LES-AGENT.md routes to it", async () => {
+  const project = await mkdtemp(join(tmpdir(), "les-cli-project-"));
+  const home = await mkdtemp(join(tmpdir(), "les-cli-project-home-"));
+  try {
+    const env = { LES_HOME: home, LES_DISABLE_PATH_SETUP: "1" };
+    assert.equal(run([], project, env).status, 0);
+    assert.equal(run(["init"], project, env).status, 0);
+    assert.match(await readFile(join(project, "LES-AGENT.md"), "utf8"), /`\.les\/ENTRYPOINT\.md`/u);
+    assert.match(run(["doctor"], project, env).stdout, /\[FALLBACK\] project-overlay: .*les project init/u);
+
+    assert.equal(run(["project", "init", "--dry-run"], project, env).status, 0);
+    assert.equal(await access(join(project, ".les")).then(() => true).catch(() => false), false);
+    await mkdir(join(project, ".les"), { recursive: true });
+    await writeFile(join(project, ".les", "CONTEXT.md"), "mine\n");
+    const result = run(["project", "init"], project, env);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(await readFile(join(project, ".les", "CONTEXT.md"), "utf8"), "mine\n");
+    const expected = (await filesBelow(join(root, "templates", "project"))).filter((path) => path !== "README.md").sort();
+    assert.deepEqual((await filesBelow(join(project, ".les"))).sort(), expected);
+    assert.match(await readFile(join(project, ".les", "ENTRYPOINT.md"), "utf8"), /## Path rules/u);
+    assert.equal(run(["project", "init"], project, env).status, 0);
+    assert.match(run(["doctor"], project, env).stdout, /\[READY\] project-overlay/u);
+    assert.notEqual(run(["project"], project, env).status, 0);
   } finally {
     await rm(project, { recursive: true, force: true });
     await rm(home, { recursive: true, force: true });

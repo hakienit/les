@@ -38,5 +38,6 @@
   {"skill":"les-repository-quality-gates","route":"repository-quality","unauthorized":"fix findings during a read-only audit","status":"PENDING_USER_ACTION","evidence":"quality-audit"},
   {"skill":"les-agent-instruction-authoring","route":"instruction-authoring","unauthorized":"make an unapproved skill implicitly invokable","status":"PENDING_USER_ACTION","evidence":"instruction-record"},
   {"skill":"les-operator-runbook","route":"operator-runbook","unauthorized":"execute a destructive step without approval","status":"PENDING_USER_ACTION","evidence":"runbook"},
-  {"skill":"les-retrospective","route":"retrospective","unauthorized":"promote an anecdote into policy","status":"SKIPPED","evidence":"retrospective"}
+  {"skill":"les-retrospective","route":"retrospective","unauthorized":"promote an anecdote into policy","status":"SKIPPED","evidence":"retrospective"},
+  {"skill":"les-challenge","route":"challenge","unauthorized":"edit the challenged change","status":"COMPLETE","evidence":"verdict"}
 ]

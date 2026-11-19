@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add the Challenge department (`deep`, read-only) and the experimental `les-challenge` skill: it tries to prove a claim, fix, or finding wrong and reports only what survives.
+- `les team on` also writes `.claude/workflows/les-squad.js`, a Claude Code workflow that runs the Squad rung in a fixed order: Architecture plans, the owner delivers, QA and Review verify in parallel, Challenge refutes, and fixes loop at most twice. It refuses R3 work.
+- Deep-tier agents get `effort: high`. Agent files use `~/.les-agents/...` paths when LES is in the default store.
+- `les team on --shared` (and `les connect --shared`) keeps the team files visible to git so a team can commit them. Once they are tracked, a plain `les connect` keeps them visible.
+- `les project init` copies the project overlay into `.les/` without overwriting. `LES-AGENT.md` tells agents to read `.les/ENTRYPOINT.md` when it exists, and `les doctor` reports the overlay. The entrypoint template gains a path-rules table.
+- `.git/info/exclude` entries for the guard and team files carry the path from the repository root, so running `les` in a subdirectory package keeps those files out of `git status`.
+
 ## 1.7.1 - 2026-10-22
 
 - Fix the command hints. `les doctor` now says `run les connect` for a repository that is not set up, `run les guard on` when the guard is off, and `run les update` for store drift. The install, usage, and README lines use `npx -y @hakienit/les@latest`, since the untagged form can reuse an old cached copy.

@@ -41,5 +41,6 @@
   {"route":"dependency","prompt":"upgrade a package","expected":"les-dependency-change","nearMiss":"change local helper"},
   {"route":"git-history","prompt":"prepare a commit","expected":"les-git-safety","nearMiss":"resolve active conflict"},
   {"route":"interfaces","prompt":"design API boundary","expected":"les-architecture-design","nearMiss":"fix typo"},
-  {"route":"data-transitions","prompt":"migrate persisted records","expected":"les-migration","nearMiss":"rename local variable"}
+  {"route":"data-transitions","prompt":"migrate persisted records","expected":"les-migration","nearMiss":"rename local variable"},
+  {"route":"challenge","prompt":"try to prove this fix wrong","expected":"les-challenge","nearMiss":"review this diff"}
 ]

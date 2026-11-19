@@ -45,7 +45,8 @@ Run `npx` outside a checkout of this repository, then open a new terminal so
 | `les guard on`, `les guard off` | Turn the Claude Code guard on or off. `connect` already turns it on. |
 | `les guard on codex`, `les guard off codex` | Same for Codex shell commands in `.codex/hooks.json`. |
 | `les guard on gemini`, `les guard off gemini` | Same for Gemini CLI in `.gemini/settings.json`. |
-| `les team on`, `les team off` | Add or remove the Claude Code subagents. `connect` already adds them. |
+| `les team on`, `les team off` | Add or remove the Claude Code subagents and the `les-squad` workflow. `connect` already adds them. Add `--shared` to write portable paths and keep them visible to git so the team can commit them. |
+| `les project init` | Copy the project overlay template into `.les/` (never overwrites). `LES-AGENT.md` points agents at `.les/ENTRYPOINT.md` when it exists. |
 | `les lint FILE...` | Flag placeholders and unmeasurable acceptance criteria in a spec. |
 | `les doctor`, `les status` | Check the install, the repository pointers, the guard, and for updates. |
 | `les version` | Print the LES version. |
@@ -53,7 +54,7 @@ Run `npx` outside a checkout of this repository, then open a new terminal so
 `les connect` also turns on:
 
 - **Guard.** Hooks that block secret reads, deletes outside the project, and force pushes to protected branches. Claude Code also gets a gate on edits until the bootstrap is read; the session-start hook injects the bootstrap (under the 10,000-character hook cap) so nothing needs reading. A Stop hook sends back, once, a reply that used tools but lacks the LES status footer. Codex (`.codex/hooks.json`, trust the hooks with `/hooks`) and Gemini CLI (`.gemini/settings.json`) get the risky-call blocks without the read gate. The Claude Code guard fails closed (2.1.295+): if its script is missing or crashes, tool calls are blocked until you run `les guard off` in a normal terminal. A guardrail, not a sandbox.
-- **Team.** One Claude Code subagent per LES department (Product, Architecture, Engineering, Frontend, QA, Security, Review, DevOps, Scout) in `.claude/agents`, each on a model sized to its job. The Lead dispatches only when the work needs it.
+- **Team.** One Claude Code subagent per LES department (Product, Architecture, Engineering, Frontend, QA, Security, Review, DevOps, Scout, Challenge) in `.claude/agents`, each on a model sized to its job, plus the `les-squad` workflow in `.claude/workflows` that runs plan, deliver, verify, and challenge in a fixed order. The Lead dispatches only when the work needs it.
 
 Add `--dry-run` to any repository command to preview it. LES never overwrites a
 pointer file you own (`les connect` skips it and prints the pointer to add by hand), and it never writes to `~/.codex`, `~/.claude`, `~/.gemini`,

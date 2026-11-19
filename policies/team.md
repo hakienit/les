@@ -20,6 +20,7 @@ status. **Departments** do bounded work from a brief. The canonical registry is
 | Review | deep | read | change review, quality audit |
 | DevOps | standard | write | git safety, merge conflicts, release readiness, incidents, runbooks, workspace isolation |
 | Scout | fast | read | investigation and code location |
+| Challenge | deep | read | adversarial verification of claims, fixes, and findings |
 
 Tiers set capability against cost: `fast` for search, reading, and running
 checks; `standard` for implementation; `deep` for judgment where a miss is
@@ -36,7 +37,9 @@ pays for that overhead.
    Add Scout first when the affected code is unfamiliar, so wide reads stay in
    the `fast` tier.
 3. **Squad** (R2): Architecture plans, the owning department delivers, then QA
-   and Review run independently and may run in parallel.
+   and Review run independently and may run in parallel. Challenge then tries
+   to refute each blocker, high, or medium finding and the delivery claim; only
+   findings that survive go back to the writer.
 4. **Touchpoints** add one department each: Security for a trust boundary,
    Frontend for the frontend profile, DevOps for history or release operations.
 5. **R3**: Squad plus the human approval gate immediately before the action.
@@ -74,6 +77,10 @@ risk, and the next safe action. No narrative, no file dumps, no restated brief.
 
 With `les connect`, Claude Code gets one subagent per department in
 `.claude/agents/les-<id>.md`, with the tier mapped to a model. Dispatch to
-`les-<id>`. On a host without subagents, the Lead runs the departments in
+`les-<id>`. The `les-squad` workflow in `.claude/workflows/` runs the Squad
+rung deterministically (at most two fix rounds) and returns evidence; the Lead
+still reports the terminal status. `les team on --shared` writes the files with
+portable `~/.les-agents` paths and keeps them visible to git so a team can
+commit them. On a host without subagents, the Lead runs the departments in
 sequence and keeps the brief and report boundary between them, loading only the
 active department's skill.
