@@ -56,6 +56,36 @@ Run `npx` outside a checkout of this repository, then open a new terminal so
 - **Guard.** Hooks that block secret reads, deletes outside the project, and force pushes to protected branches. Claude Code also gets a gate on edits until the bootstrap is read; the session-start hook injects the bootstrap (under the 10,000-character hook cap) so nothing needs reading. A Stop hook sends back, once, a reply that used tools but lacks the LES status footer. Codex (`.codex/hooks.json`, trust the hooks with `/hooks`) and Gemini CLI (`.gemini/settings.json`) get the risky-call blocks without the read gate. The Claude Code guard fails closed (2.1.295+): if its script is missing or crashes, tool calls are blocked until you run `les guard off` in a normal terminal. A guardrail, not a sandbox.
 - **Team.** One Claude Code subagent per LES department (Product, Architecture, Engineering, Frontend, QA, Security, Review, DevOps, Scout, Challenge) in `.claude/agents`, each on a model sized to its job, plus the `les-squad` workflow in `.claude/workflows` that runs plan, deliver, verify, and challenge in a fixed order. The Lead dispatches only when the work needs it.
 
+## Team and the Squad workflow
+
+The Lead (your session agent) picks the lowest rung that covers the work:
+Solo for R0 or one-route R1, Pair for multi-step R1, Squad for R2, plus a human
+gate for R3. Departments get a brief and return a report; a writer never
+reviews its own change, and Challenge tries to refute every serious finding.
+
+In Claude Code, ask for the Squad workflow with its arguments:
+
+~~~text
+Run the les-squad workflow with {"task": "...", "acceptance": ["..."], "risk": "R2",
+"owner": "engineering", "paths": ["src/..."], "security": false}
+~~~
+
+It plans, delivers, verifies with QA and Review in parallel, challenges the
+result, and loops at most two fix rounds. It refuses R3 work, and the Lead still
+reports the terminal status.
+
+To share the team with your repository, run `les team on --shared` and commit
+`.claude/agents/les-*.md` and `.claude/workflows/les-squad.js`. The files use
+`~/.les-agents` paths, so every teammate needs LES installed.
+
+## Project overlay
+
+`les project init` creates `.les/` for what belongs to your project, not to LES:
+`ENTRYPOINT.md` (commands and path rules), `CONTEXT.md` (domain terms),
+`decisions/` (ADRs), `knowledge/`, `team/` (department overrides), and
+`work/HANDOFF.md`. Agents read `.les/ENTRYPOINT.md` right after the bootstrap.
+The overlay may narrow LES rules, never weaken them.
+
 Add `--dry-run` to any repository command to preview it. LES never overwrites a
 pointer file you own (`les connect` skips it and prints the pointer to add by hand), and it never writes to `~/.codex`, `~/.claude`, `~/.gemini`,
 or other provider directories.
