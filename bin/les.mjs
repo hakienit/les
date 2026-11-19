@@ -834,7 +834,8 @@ try {
   const target = userRoot();
   if (command === "update") {
     // Run the latest published package: this copy only knows its own version.
-    const npx = ["-y", packageMetadata.name + "@latest"];
+    // --prefer-online: a cached packument from just before a release names the new latest tag but lacks its version (ETARGET).
+    const npx = ["-y", "--prefer-online", packageMetadata.name + "@latest"];
     printPlan("update", target, ["run npx " + npx.join(" ")]);
     if (!options.dryRun) {
       const result = process.platform === "win32"

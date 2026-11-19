@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `les update` runs `npx -y --prefer-online @hakienit/les@latest`. Right after a release, npm could reuse cached metadata that lacks the new version and fail with `ETARGET`.
+
 ## 1.8.0 - 2026-11-19
 
 - Add the Challenge department (`deep`, read-only) and the experimental `les-challenge` skill: it tries to prove a claim, fix, or finding wrong and reports only what survives.

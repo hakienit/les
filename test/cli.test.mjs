@@ -290,7 +290,7 @@ test("update runs the latest published package through npx", async () => {
     assert.equal(run(["update", "--dry-run"], root, env).status, 0);
     assert.equal(await access(env.NPX_LOG).then(() => true).catch(() => false), false);
     assert.equal(run(["update"], root, env).status, 0);
-    assert.equal((await readFile(env.NPX_LOG, "utf8")).trim(), "-y " + packageMetadata.name + "@latest");
+    assert.equal((await readFile(env.NPX_LOG, "utf8")).trim(), "-y --prefer-online " + packageMetadata.name + "@latest");
     const failed = run(["update"], root, { ...env, NPX_FAIL: "1" });
     assert.equal(failed.status, 2);
     assert.match(failed.stderr, /npx .* failed/);
