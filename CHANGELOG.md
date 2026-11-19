@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.8.0 - 2026-11-19
 
 - Add the Challenge department (`deep`, read-only) and the experimental `les-challenge` skill: it tries to prove a claim, fix, or finding wrong and reports only what survives.
 - `les team on` also writes `.claude/workflows/les-squad.js`, a Claude Code workflow that runs the Squad rung in a fixed order: Architecture plans, the owner delivers, QA and Review verify in parallel, Challenge refutes, and fixes loop at most twice. It refuses R3 work.
