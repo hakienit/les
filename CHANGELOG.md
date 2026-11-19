@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.8.1 - 2026-11-19
 
 - `les update` runs `npx -y --prefer-online @hakienit/les@latest`. Right after a release, npm could reuse cached metadata that lacks the new version and fail with `ETARGET`.
 
